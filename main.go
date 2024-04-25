@@ -23,7 +23,7 @@ type Configuration struct {
 		ReliableTickRange     uint32        `conf:"default:30"`
 	}
 	Service struct {
-		TickerUpdateInterval int `conf:"default:10"`
+		TickerUpdateInterval time.Duration `conf:"default:5s"`
 	}
 }
 
@@ -65,7 +65,7 @@ func run() error {
 	container := node.NewNodeContainer(config.Qubic.PeerList, config.Qubic.MaxTickErrorThreshold, config.Qubic.ReliableTickRange, config.Qubic.ExchangeTimeout)
 
 	go func() {
-		ticker := time.NewTicker(time.Duration(int64(config.Service.TickerUpdateInterval) * int64(time.Second)))
+		ticker := time.NewTicker(config.Service.TickerUpdateInterval)
 
 		for {
 			select {

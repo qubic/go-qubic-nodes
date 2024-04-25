@@ -1,7 +1,9 @@
 package node
 
 import (
+	"context"
 	"github.com/pkg/errors"
+	qubic "github.com/qubic/go-node-connector"
 	"github.com/qubic/go-node-connector/types"
 	"log"
 	"time"
@@ -19,8 +21,9 @@ type Node struct {
 
 func NewNode(ip string, connectionTimeout time.Duration) (*Node, error) {
 
-	client, ctx, cancel, err := NewNodeConnection(ip, connectionTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), connectionTimeout)
 	defer cancel()
+	client, err := qubic.NewClient(ctx, ip, nodePort)
 	if err != nil {
 		return nil, errors.Wrap(err, "creating node connection")
 	}
@@ -33,7 +36,7 @@ func NewNode(ip string, connectionTimeout time.Duration) (*Node, error) {
 
 	log.Printf("Found online node: %s - %d\n", ip, tickInfo.Tick)
 
-	var node = Node{
+	node := Node{
 		ip,
 		client.Peers,
 		tickInfo.Tick,
@@ -44,25 +47,25 @@ func NewNode(ip string, connectionTimeout time.Duration) (*Node, error) {
 	return &node, nil
 }
 
-func (node *Node) Update(connectionTimeout time.Duration) error {
-	client, ctx, cancel, err := NewNodeConnection(node.Address, connectionTimeout)
+func (n *Node) Update(connectionTimeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), connectionTimeout)
 	defer cancel()
+	client, err := qubic.NewClient(ctx, n.Address, nodePort)
 	if err != nil {
-		node.LastUpdateSuccess = false
 		return errors.Wrap(err, "creating node connection")
 	}
 	defer client.Close()
 
 	tickInfo, err := client.GetTickInfo(ctx)
 	if err != nil {
-		node.LastUpdateSuccess = false
+		n.LastUpdateSuccess = false
 		return errors.Wrap(err, "getting tick info from node")
 	}
 
-	node.Peers = client.Peers
-	node.LastTick = tickInfo.Tick
-	node.LastUpdate = time.Now().UTC().Unix()
-	node.LastUpdateSuccess = true
+	n.Peers = client.Peers
+	n.LastTick = tickInfo.Tick
+	n.LastUpdate = time.Now().UTC().Unix()
+	n.LastUpdateSuccess = true
 
 	return nil
 

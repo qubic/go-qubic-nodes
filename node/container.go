@@ -10,16 +10,23 @@ import (
 type Map map[string]*Node
 
 type Container struct {
-	Addresses          []string `json:"-"`
-	TickErrorThreshold uint32   `json:"-"`
-	ReliableTickRange  uint32   `json:"-"`
-	OnlineNodes        *Map     `json:"-"`
-	MaxTick            uint32   `json:"max_tick"`
-	LastUpdate         int64    `json:"last_update"`
-	ReliableNodes      []*Node  `json:"reliable_nodes"`
-	MostReliableNode   *Node    `json:"most_reliable_node"`
+	Addresses          []string
+	TickErrorThreshold uint32
+	ReliableTickRange  uint32
+	OnlineNodes        *Map
+	MaxTick            uint32
+	LastUpdate         int64
+	ReliableNodes      []*Node
+	MostReliableNode   *Node
 	mutexLock          sync.RWMutex
 	connectionTimeout  time.Duration
+}
+
+type ContainerResponse struct {
+	MaxTick          uint32
+	LastUpdate       int64
+	ReliableNodes    []*Node
+	MostReliableNode *Node
 }
 
 func NewNodeContainer(addresses []string, tickErrorThreshold, reliableTickRange uint32, connectionTimeout time.Duration) *Container {
@@ -35,30 +42,43 @@ func NewNodeContainer(addresses []string, tickErrorThreshold, reliableTickRange 
 	return &container
 }
 
-func (container *Container) Update() {
-
-	container.mutexLock.RLock()
-	defer container.mutexLock.RUnlock()
+func (c *Container) Update() {
 
 	//TODO: Maybe use node.Update() instead of creating new nodes every time...
-	onlineNodes, tickList := fetchOnlineNodes(container.Addresses, container.connectionTimeout)
-	container.OnlineNodes = onlineNodes
+	onlineNodes, tickList := fetchOnlineNodes(c.Addresses, c.connectionTimeout)
 	slices.Sort(tickList)
+	maxTick := calculateMaxTick(tickList, c.TickErrorThreshold)
+	reliableNodes, mostReliableNode := getReliableNodes(onlineNodes, maxTick, maxTick-c.ReliableTickRange)
 
-	maxTick := calculateMaxTick(tickList, container.TickErrorThreshold)
-	container.MaxTick = maxTick
+	c.Set(onlineNodes, maxTick, time.Now().UTC().Unix(), reliableNodes, mostReliableNode)
+}
 
-	container.LastUpdate = time.Now().UTC().Unix()
+func (c *Container) Set(OnlineNodes *Map, MaxTick uint32, LastUpdate int64, ReliableNodes []*Node, MostReliableNode *Node) {
+	c.mutexLock.Lock()
+	defer c.mutexLock.Unlock()
 
-	reliableNodes, mostReliableNode := getReliableNodes(onlineNodes, maxTick, maxTick-container.ReliableTickRange)
-	container.ReliableNodes = reliableNodes
-	container.MostReliableNode = mostReliableNode
+	c.OnlineNodes = OnlineNodes
+	c.MaxTick = MaxTick
+	c.LastUpdate = LastUpdate
+	c.ReliableNodes = ReliableNodes
+	c.MostReliableNode = MostReliableNode
+}
 
+func (c *Container) GetResponse() ContainerResponse {
+	c.mutexLock.RLock()
+	defer c.mutexLock.RUnlock()
+
+	return ContainerResponse{
+		MaxTick:          c.MaxTick,
+		LastUpdate:       c.LastUpdate,
+		ReliableNodes:    c.ReliableNodes,
+		MostReliableNode: c.MostReliableNode,
+	}
 }
 
 func fetchOnlineNodes(addresses []string, connectionTimeout time.Duration) (*Map, []uint32) {
 
-	onlineNodes := Map{}
+	onlineNodes := make(Map)
 	tickList := make([]uint32, 0)
 
 	for _, address := range addresses {
