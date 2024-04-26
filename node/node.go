@@ -12,11 +12,11 @@ import (
 const nodePort = "21841"
 
 type Node struct {
-	Address           string            `json:"address"`
-	Peers             types.PublicPeers `json:"peers"`
-	LastTick          uint32            `json:"last_tick"`
-	LastUpdate        int64             `json:"last_update"`
-	LastUpdateSuccess bool              `json:"last_update_success"`
+	Address           string
+	Peers             types.PublicPeers
+	LastTick          uint32
+	LastUpdate        int64
+	LastUpdateSuccess bool
 }
 
 func NewNode(ip string, connectionTimeout time.Duration) (*Node, error) {
@@ -43,7 +43,6 @@ func NewNode(ip string, connectionTimeout time.Duration) (*Node, error) {
 		time.Now().UTC().Unix(),
 		true,
 	}
-
 	return &node, nil
 }
 
@@ -68,5 +67,4 @@ func (n *Node) Update(connectionTimeout time.Duration) error {
 	n.LastUpdateSuccess = true
 
 	return nil
-
 }

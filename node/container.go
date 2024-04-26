@@ -1,19 +1,19 @@
 package node
 
 import (
+	"cmp"
+	"github.com/pkg/errors"
 	"log"
 	"slices"
 	"sync"
 	"time"
 )
 
-type Map map[string]*Node
-
 type Container struct {
 	Addresses          []string
 	TickErrorThreshold uint32
 	ReliableTickRange  uint32
-	OnlineNodes        *Map
+	OnlineNodes        []*Node
 	MaxTick            uint32
 	LastUpdate         int64
 	ReliableNodes      []*Node
@@ -29,7 +29,7 @@ type ContainerResponse struct {
 	MostReliableNode *Node
 }
 
-func NewNodeContainer(addresses []string, tickErrorThreshold, reliableTickRange uint32, connectionTimeout time.Duration) *Container {
+func NewNodeContainer(addresses []string, tickErrorThreshold, reliableTickRange uint32, connectionTimeout time.Duration) (*Container, error) {
 
 	container := Container{
 		Addresses:          addresses,
@@ -37,23 +37,40 @@ func NewNodeContainer(addresses []string, tickErrorThreshold, reliableTickRange 
 		ReliableTickRange:  reliableTickRange,
 		connectionTimeout:  connectionTimeout,
 	}
-	container.Update()
+	err := container.Update()
+	if err != nil {
+		return nil, errors.Wrap(err, "updating container after initialization")
+	}
 
-	return &container
+	return &container, nil
 }
 
-func (c *Container) Update() {
+func (c *Container) Update() error {
 
-	//TODO: Maybe use node.Update() instead of creating new nodes every time...
-	onlineNodes, tickList := fetchOnlineNodes(c.Addresses, c.connectionTimeout)
-	slices.Sort(tickList)
-	maxTick := calculateMaxTick(tickList, c.TickErrorThreshold)
+	log.Printf("<==========REFRESH==========>\n")
+	log.Printf("Refreshing nodes...\n")
+
+	onlineNodes := fetchOnlineNodes(c.Addresses, c.connectionTimeout)
+	slices.SortFunc(onlineNodes, func(a, b *Node) int {
+		return cmp.Compare(a.LastTick, b.LastTick)
+	})
+	maxTick := calculateMaxTick(onlineNodes, c.TickErrorThreshold)
+
 	reliableNodes, mostReliableNode := getReliableNodes(onlineNodes, maxTick, maxTick-c.ReliableTickRange)
 
 	c.Set(onlineNodes, maxTick, time.Now().UTC().Unix(), reliableNodes, mostReliableNode)
+
+	log.Printf("Ip count: %d\n", len(c.Addresses))
+	log.Printf("Max tick: %d\n", maxTick)
+	log.Printf("Reliable nodes: %d / %d online\n", len(reliableNodes), len(onlineNodes))
+	if mostReliableNode != nil {
+		log.Printf("Most reliable node: %s\n", mostReliableNode.Address)
+	}
+
+	return nil
 }
 
-func (c *Container) Set(OnlineNodes *Map, MaxTick uint32, LastUpdate int64, ReliableNodes []*Node, MostReliableNode *Node) {
+func (c *Container) Set(OnlineNodes []*Node, MaxTick uint32, LastUpdate int64, ReliableNodes []*Node, MostReliableNode *Node) {
 	c.mutexLock.Lock()
 	defer c.mutexLock.Unlock()
 
@@ -76,10 +93,9 @@ func (c *Container) GetResponse() ContainerResponse {
 	}
 }
 
-func fetchOnlineNodes(addresses []string, connectionTimeout time.Duration) (*Map, []uint32) {
+func fetchOnlineNodes(addresses []string, connectionTimeout time.Duration) []*Node {
 
-	onlineNodes := make(Map)
-	tickList := make([]uint32, 0)
+	var onlineNodes []*Node
 
 	for _, address := range addresses {
 		node, err := NewNode(address, connectionTimeout)
@@ -88,17 +104,27 @@ func fetchOnlineNodes(addresses []string, connectionTimeout time.Duration) (*Map
 			continue
 		}
 
-		onlineNodes[address] = node
-		tickList = append(tickList, node.LastTick)
+		onlineNodes = append(onlineNodes, node)
 	}
 
-	return &onlineNodes, tickList
+	return onlineNodes
 
 }
 
-func calculateMaxTick(tickList []uint32, threshold uint32) uint32 {
-	maxTick := tickList[len(tickList)-1]
-	maxTick2 := tickList[len(tickList)-2]
+func calculateMaxTick(nodes []*Node, threshold uint32) uint32 {
+
+	arrayLength := len(nodes)
+
+	if arrayLength == 0 {
+		return 0
+	}
+
+	if arrayLength < 2 {
+		return nodes[0].LastTick
+	}
+
+	maxTick := nodes[len(nodes)-1].LastTick
+	maxTick2 := nodes[len(nodes)-2].LastTick
 
 	if maxTick2 != 0 && (maxTick-maxTick2) >= threshold {
 		return maxTick2
@@ -106,13 +132,13 @@ func calculateMaxTick(tickList []uint32, threshold uint32) uint32 {
 	return maxTick
 }
 
-func getReliableNodes(onlineNodes *Map, maximum, minimum uint32) ([]*Node, *Node) {
+func getReliableNodes(onlineNodes []*Node, maximum, minimum uint32) ([]*Node, *Node) {
 
 	var reliableNodes []*Node
 
 	var mostReliableNode *Node
 
-	for _, node := range *onlineNodes {
+	for _, node := range onlineNodes {
 
 		if node.LastTick >= minimum && node.LastTick <= maximum {
 

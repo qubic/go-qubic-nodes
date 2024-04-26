@@ -62,7 +62,10 @@ func run() error {
 	}
 	log.Printf("main: Config :\n%v\n", out)
 
-	container := node.NewNodeContainer(config.Qubic.PeerList, config.Qubic.MaxTickErrorThreshold, config.Qubic.ReliableTickRange, config.Qubic.ExchangeTimeout)
+	container, err := node.NewNodeContainer(config.Qubic.PeerList, config.Qubic.MaxTickErrorThreshold, config.Qubic.ReliableTickRange, config.Qubic.ExchangeTimeout)
+	if err != nil {
+		log.Printf("Error: %v\n", err)
+	}
 
 	go func() {
 		ticker := time.NewTicker(config.Service.TickerUpdateInterval)
@@ -70,7 +73,10 @@ func run() error {
 		for {
 			select {
 			case <-ticker.C:
-				container.Update()
+				updateErr := container.Update()
+				if updateErr != nil {
+					log.Printf("Error: %v\n", updateErr)
+				}
 			}
 		}
 	}()
