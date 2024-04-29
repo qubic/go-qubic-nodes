@@ -88,6 +88,7 @@ func run() error {
 	}
 
 	http.HandleFunc("/status", handler.HandleStatus)
+	http.HandleFunc("/max-tick", handler.HandleMaxTick)
 
 	return http.ListenAndServe(":8080", nil)
 

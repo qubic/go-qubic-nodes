@@ -27,6 +27,10 @@ type nodeResponse struct {
 	LastUpdate int64             `json:"last_update"`
 }
 
+type maxTickResponse struct {
+	MaxTick uint32 `json:"max_tick"`
+}
+
 func (h *RequestHandler) HandleStatus(writer http.ResponseWriter, request *http.Request) {
 
 	containerResponse := h.Container.GetResponse()
@@ -73,4 +77,28 @@ func (h *RequestHandler) HandleStatus(writer http.ResponseWriter, request *http.
 		log.Printf("Failed to write response for status request. Err: %v\n", err)
 	}
 
+}
+
+func (h *RequestHandler) HandleMaxTick(writer http.ResponseWriter, request *http.Request) {
+
+	maxTick := h.Container.GetResponse().MaxTick
+
+	response := maxTickResponse{
+		maxTick,
+	}
+
+	data, err := json.Marshal(response)
+	if err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		//TODO: Handle?
+		writer.Write([]byte(err.Error()))
+		return
+	}
+
+	writer.Header().Add("Content-Type", "application/json")
+	writer.WriteHeader(http.StatusOK)
+	_, err = writer.Write(data)
+	if err != nil {
+		log.Printf("Failed to write response for max-tick request. Err: %v\n", err)
+	}
 }
