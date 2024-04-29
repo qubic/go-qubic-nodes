@@ -16,7 +16,7 @@ const prefix = "QUBIC_NODES"
 
 type Configuration struct {
 	Qubic struct {
-		PeerList              []string      `conf:"default:95.156.231.28;206.83.152.134"`
+		PeerList              []string      `conf:"default:5.39.222.64;82.197.173.130;82.197.173.129"`
 		MaxPeers              int           `conf:"default:50"`
 		ExchangeTimeout       time.Duration `conf:"default:2s"`
 		MaxTickErrorThreshold uint32        `conf:"default:50"`

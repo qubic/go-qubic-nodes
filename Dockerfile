@@ -7,8 +7,7 @@ RUN go mod tidy
 RUN go build -o "/src/bin/go-qubic-nodes"
 
 # We don't need golang to run binaries, just use alpine.
-FROM ubuntu:22.04
-RUN apt-get update && apt-get install -y ca-certificates
+FROM alpine:latest
 COPY --from=builder /src/bin/go-qubic-nodes /app/go-qubic-nodes
 RUN chmod +x /app/go-qubic-nodes
 
