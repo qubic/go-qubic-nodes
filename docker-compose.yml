@@ -1,0 +1,6 @@
+services:
+  qubic-nodes:
+    image: qubic-nodes
+    container_name: qubic-nodes
+    ports:
+      - "8080:8080"
