@@ -1,6 +1,8 @@
 services:
   qubic-nodes:
-    image: qubic-nodes
+    image: ghcr.io/qubic/qubic-nodes:v1.0.2
     container_name: qubic-nodes
+    environment:
+      QUBIC_NODES_QUBIC_PEER_LIST: "5.39.222.64;82.197.173.130;82.197.173.129"
     ports:
       - "8080:8080"
