@@ -17,6 +17,7 @@ const prefix = "QUBIC_NODES"
 type Configuration struct {
 	Qubic struct {
 		PeerList              []string      `conf:"default:5.39.222.64;82.197.173.130;82.197.173.129"`
+		PeerPort              string        `conf:"default:21841"`
 		ExchangeTimeout       time.Duration `conf:"default:2s"`
 		MaxTickErrorThreshold uint32        `conf:"default:50"`
 		ReliableTickRange     uint32        `conf:"default:30"`
@@ -61,7 +62,7 @@ func run() error {
 	}
 	log.Printf("main: Config :\n%v\n", out)
 
-	container, err := node.NewNodeContainer(config.Qubic.PeerList, config.Qubic.MaxTickErrorThreshold, config.Qubic.ReliableTickRange, config.Qubic.ExchangeTimeout)
+	container, err := node.NewNodeContainer(config.Qubic.PeerList, config.Qubic.PeerPort, config.Qubic.MaxTickErrorThreshold, config.Qubic.ReliableTickRange, config.Qubic.ExchangeTimeout)
 	if err != nil {
 		log.Printf("Error: %v\n", err)
 	}

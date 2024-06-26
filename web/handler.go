@@ -22,6 +22,7 @@ type statusResponse struct {
 
 type nodeResponse struct {
 	Address    string            `json:"address"`
+	Port       string            `json:"port"`
 	Peers      types.PublicPeers `json:"peers"`
 	LastTick   uint32            `json:"last_tick"`
 	LastUpdate int64             `json:"last_update"`
@@ -39,6 +40,7 @@ func (h *RequestHandler) HandleStatus(writer http.ResponseWriter, request *http.
 	for _, reliableNode := range containerResponse.ReliableNodes {
 		r := nodeResponse{
 			Address:    reliableNode.Address,
+			Port:       reliableNode.Port,
 			Peers:      reliableNode.Peers,
 			LastTick:   reliableNode.LastTick,
 			LastUpdate: reliableNode.LastUpdate,
@@ -50,6 +52,7 @@ func (h *RequestHandler) HandleStatus(writer http.ResponseWriter, request *http.
 
 	mostReliableResponse := nodeResponse{
 		Address:    mostReliable.Address,
+		Port:       mostReliable.Port,
 		Peers:      mostReliable.Peers,
 		LastTick:   mostReliable.LastTick,
 		LastUpdate: mostReliable.LastUpdate,

@@ -11,6 +11,7 @@ import (
 
 type Container struct {
 	Addresses          []string
+	Port               string
 	TickErrorThreshold uint32
 	ReliableTickRange  uint32
 	OnlineNodes        []*Node
@@ -29,10 +30,11 @@ type ContainerResponse struct {
 	MostReliableNode *Node
 }
 
-func NewNodeContainer(addresses []string, tickErrorThreshold, reliableTickRange uint32, connectionTimeout time.Duration) (*Container, error) {
+func NewNodeContainer(addresses []string, port string, tickErrorThreshold, reliableTickRange uint32, connectionTimeout time.Duration) (*Container, error) {
 
 	container := Container{
 		Addresses:          addresses,
+		Port:               port,
 		TickErrorThreshold: tickErrorThreshold,
 		ReliableTickRange:  reliableTickRange,
 		connectionTimeout:  connectionTimeout,
@@ -50,7 +52,7 @@ func (c *Container) Update() error {
 	log.Printf("<==========REFRESH==========>\n")
 	log.Printf("Refreshing nodes...\n")
 
-	onlineNodes := fetchOnlineNodes(c.Addresses, c.connectionTimeout)
+	onlineNodes := fetchOnlineNodes(c.Addresses, c.Port, c.connectionTimeout)
 	slices.SortFunc(onlineNodes, func(a, b *Node) int {
 		return cmp.Compare(a.LastTick, b.LastTick)
 	})
@@ -93,12 +95,12 @@ func (c *Container) GetResponse() ContainerResponse {
 	}
 }
 
-func fetchOnlineNodes(addresses []string, connectionTimeout time.Duration) []*Node {
+func fetchOnlineNodes(addresses []string, port string, connectionTimeout time.Duration) []*Node {
 
 	var onlineNodes []*Node
 
 	for _, address := range addresses {
-		node, err := NewNode(address, connectionTimeout)
+		node, err := NewNode(address, port, connectionTimeout)
 		if err != nil {
 			log.Printf("Failed to create node: %v\n", err)
 			continue

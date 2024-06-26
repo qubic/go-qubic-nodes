@@ -9,21 +9,20 @@ import (
 	"time"
 )
 
-const nodePort = "21841"
-
 type Node struct {
 	Address           string
+	Port              string
 	Peers             types.PublicPeers
 	LastTick          uint32
 	LastUpdate        int64
 	LastUpdateSuccess bool
 }
 
-func NewNode(ip string, connectionTimeout time.Duration) (*Node, error) {
+func NewNode(ip string, port string, connectionTimeout time.Duration) (*Node, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), connectionTimeout)
 	defer cancel()
-	client, err := qubic.NewClient(ctx, ip, nodePort)
+	client, err := qubic.NewClient(ctx, ip, port)
 	if err != nil {
 		return nil, errors.Wrap(err, "creating node connection")
 	}
@@ -37,11 +36,12 @@ func NewNode(ip string, connectionTimeout time.Duration) (*Node, error) {
 	log.Printf("Found online node: %s - %d\n", ip, tickInfo.Tick)
 
 	node := Node{
-		ip,
-		client.Peers,
-		tickInfo.Tick,
-		time.Now().UTC().Unix(),
-		true,
+		Address:           ip,
+		Port:              port,
+		Peers:             client.Peers,
+		LastTick:          tickInfo.Tick,
+		LastUpdate:        time.Now().UTC().Unix(),
+		LastUpdateSuccess: true,
 	}
 	return &node, nil
 }
@@ -49,7 +49,7 @@ func NewNode(ip string, connectionTimeout time.Duration) (*Node, error) {
 func (n *Node) Update(connectionTimeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), connectionTimeout)
 	defer cancel()
-	client, err := qubic.NewClient(ctx, n.Address, nodePort)
+	client, err := qubic.NewClient(ctx, n.Address, n.Port)
 	if err != nil {
 		return errors.Wrap(err, "creating node connection")
 	}
