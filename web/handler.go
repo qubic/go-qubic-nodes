@@ -32,9 +32,18 @@ type maxTickResponse struct {
 	MaxTick uint32 `json:"max_tick"`
 }
 
-func (h *RequestHandler) HandleStatus(writer http.ResponseWriter, request *http.Request) {
+func (h *RequestHandler) HandleStatus(writer http.ResponseWriter, _ *http.Request) {
 
 	containerResponse := h.Container.GetResponse()
+
+	if len(containerResponse.ReliableNodes) == 0 {
+		writer.WriteHeader(http.StatusServiceUnavailable)
+		_, err := writer.Write([]byte("No online or reliable nodes found."))
+		if err != nil {
+			log.Printf("Failed to respond to request: %v\n", err)
+		}
+		return
+	}
 
 	var reliableNodes []nodeResponse
 	for _, reliableNode := range containerResponse.ReliableNodes {
@@ -68,8 +77,10 @@ func (h *RequestHandler) HandleStatus(writer http.ResponseWriter, request *http.
 	data, err := json.Marshal(response)
 	if err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
-		//TODO: Handle?
-		writer.Write([]byte(err.Error()))
+		_, err := writer.Write([]byte(err.Error()))
+		if err != nil {
+			log.Printf("Failed to respond to request: %v\n", err)
+		}
 		return
 	}
 
@@ -82,7 +93,7 @@ func (h *RequestHandler) HandleStatus(writer http.ResponseWriter, request *http.
 
 }
 
-func (h *RequestHandler) HandleMaxTick(writer http.ResponseWriter, request *http.Request) {
+func (h *RequestHandler) HandleMaxTick(writer http.ResponseWriter, _ *http.Request) {
 
 	maxTick := h.Container.GetResponse().MaxTick
 
@@ -93,8 +104,10 @@ func (h *RequestHandler) HandleMaxTick(writer http.ResponseWriter, request *http
 	data, err := json.Marshal(response)
 	if err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
-		//TODO: Handle?
-		writer.Write([]byte(err.Error()))
+		_, err := writer.Write([]byte(err.Error()))
+		if err != nil {
+			log.Printf("Failed to respond to request: %v\n", err)
+		}
 		return
 	}
 
