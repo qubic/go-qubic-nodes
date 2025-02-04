@@ -14,10 +14,11 @@ type RequestHandler struct {
 }
 
 type statusResponse struct {
-	MaxTick          uint32         `json:"max_tick"`
-	LastUpdate       int64          `json:"last_update"`
-	ReliableNodes    []nodeResponse `json:"reliable_nodes"`
-	MostReliableNode nodeResponse   `json:"most_reliable_node"`
+	MaxTick                 uint32         `json:"max_tick"`
+	LastUpdate              int64          `json:"last_update"`
+	NumberOfConfiguredNodes int            `json:"number_of_configured_nodes"`
+	ReliableNodes           []nodeResponse `json:"reliable_nodes"`
+	MostReliableNode        nodeResponse   `json:"most_reliable_node"`
 }
 
 type nodeResponse struct {
@@ -68,10 +69,11 @@ func (h *RequestHandler) HandleStatus(writer http.ResponseWriter, _ *http.Reques
 	}
 
 	response := statusResponse{
-		MaxTick:          containerResponse.MaxTick,
-		LastUpdate:       containerResponse.LastUpdate,
-		ReliableNodes:    reliableNodes,
-		MostReliableNode: mostReliableResponse,
+		MaxTick:                 containerResponse.MaxTick,
+		LastUpdate:              containerResponse.LastUpdate,
+		NumberOfConfiguredNodes: len(h.Container.Addresses),
+		ReliableNodes:           reliableNodes,
+		MostReliableNode:        mostReliableResponse,
 	}
 
 	data, err := json.Marshal(response)
