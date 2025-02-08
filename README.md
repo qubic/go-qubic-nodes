@@ -19,7 +19,8 @@ The current configuration will be printed at startup.
 QUBIC_NODES_QUBIC_PEER_LIST:                "5.39.222.64;82.197.173.130;82.197.173.129"
 ```
 
-The list of bootstrap nodes might be found [here](https://app.qubic.li/network/live).
+There is no guarantee that the specified bootstrap peers will be available, and the list is not maintained.
+There are several sources of public peers, for example you can find them [here](https://app.qubic.li/network/live).
 
 #### Optional parameters
 ```shell
