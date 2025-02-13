@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"github.com/ardanlabs/conf"
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/qubic/go-qubic-nodes/metrics"
 	"github.com/qubic/go-qubic-nodes/node"
 	"github.com/qubic/go-qubic-nodes/web"
 	"log"
@@ -27,8 +25,7 @@ type Configuration struct {
 	}
 	Service struct {
 		TickerUpdateInterval time.Duration `conf:"default:5s"`
-		MetricsInstanceLabel string
-		MetricsAddress       string `conf:"default:0.0.0.0:2112"`
+		MetricsHost          string        `conf:"default:0.0.0.0:2112"`
 	}
 }
 
@@ -67,8 +64,8 @@ func run() error {
 	}
 	log.Printf("main: Config :\n%v\n", out)
 
-	createMetricsGauges(config.Service.MetricsInstanceLabel)
-	totalConfiguredNodes.Set(float64(len(config.Qubic.PeerList)))
+	meters := metrics.NewMetrics()
+	meters.SetTotalConfiguredNodes(len(config.Qubic.PeerList))
 
 	container, err := node.NewNodeContainer(config.Qubic.PeerList, config.Qubic.PeerPort, config.Qubic.MaxTickErrorThreshold, config.Qubic.ReliableTickRange, config.Qubic.ExchangeTimeout)
 	if err != nil {
@@ -84,15 +81,18 @@ func run() error {
 				updateErr := container.Update()
 				if updateErr != nil {
 					log.Printf("Error: %v\n", updateErr)
-					continue
+				} else {
+					response := container.GetResponse()
+					meters.SetReliableNodes(len(response.ReliableNodes))
 				}
-
-				response := container.GetResponse()
-				reliableNodes.Set(float64(len(response.ReliableNodes)))
 
 			}
 		}
 	}()
+
+	log.Printf("Starting metrics server...\n")
+	metricsServer := web.NewMetricsServer(config.Service.MetricsHost)
+	metricsServer.Start()
 
 	log.Printf("Staring WebServer...\n")
 
@@ -103,50 +103,6 @@ func run() error {
 	http.HandleFunc("/status", handler.HandleStatus)
 	http.HandleFunc("/max-tick", handler.HandleMaxTick)
 
-	go func() {
-		mux := http.NewServeMux()
-		mux.Handle("/metrics", promhttp.InstrumentMetricHandler(registry, promhttp.HandlerFor(registry, promhttp.HandlerOpts{})))
-
-		metricsServer := http.Server{
-			Addr:    config.Service.MetricsAddress,
-			Handler: mux,
-		}
-		err := metricsServer.ListenAndServe()
-		if err != nil {
-			log.Printf("Metrics server failed: %s\n", err)
-		}
-	}()
-
 	return http.ListenAndServe(":8080", nil)
-
-}
-
-var (
-	registry = prometheus.NewRegistry()
-	factory  = promauto.With(registry)
-
-	reliableNodes        prometheus.Gauge
-	totalConfiguredNodes prometheus.Gauge
-)
-
-func createMetricsGauges(instanceLabel string) {
-
-	var labels prometheus.Labels
-
-	if len(instanceLabel) != 0 {
-		labels = make(prometheus.Labels)
-		labels["name"] = instanceLabel
-	}
-
-	reliableNodes = factory.NewGauge(prometheus.GaugeOpts{
-		Name:        "qubic_nodes_reliable_node_count",
-		Help:        "The number of current reliable nodes.",
-		ConstLabels: labels,
-	})
-	totalConfiguredNodes = factory.NewGauge(prometheus.GaugeOpts{
-		Name:        "qubic_nodes_configured_node_count",
-		Help:        "The number of total configured nodes.",
-		ConstLabels: labels,
-	})
 
 }
