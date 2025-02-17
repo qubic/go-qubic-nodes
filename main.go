@@ -93,6 +93,6 @@ func run() error {
 	router.HandleFunc("GET /max-tick", handler.HandleMaxTick)
 	router.HandleFunc("POST /reliable-nodes", handler.GetReliableNodesWithMinimumTick)
 
-	return http.ListenAndServe(":8080", nil)
+	return http.ListenAndServe(":8080", router)
 
 }
