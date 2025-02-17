@@ -1,8 +1,13 @@
 package web
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 	"github.com/qubic/go-qubic-nodes/node"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -42,7 +47,7 @@ func TestHandler_whenStatus_thenReturnNumberOfConfiguredNodes(t *testing.T) {
 		MostReliableNode:   &node1,
 	}
 
-	handler := RequestHandler{
+	handler := PeersHandler{
 		Container: &container,
 	}
 
@@ -75,19 +80,158 @@ func TestHandler_whenStatus_thenReturnNumberOfConfiguredNodes(t *testing.T) {
 	}`
 
 	resp := makeStatusCall(handler)
-	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"), "Unexpected content type header")
-	assert.Equal(t, 200, resp.StatusCode, "Unexpected http status")
+	require.Equal(t, "application/json", resp.Header.Get("Content-Type"), "Unexpected content type header")
+	require.Equal(t, 200, resp.StatusCode, "Unexpected http status")
 	data, err := io.ReadAll(resp.Body)
-	assert.NoError(t, err)
-	assert.JSONEq(t, expectedResponse, string(data))
+	require.NoError(t, err)
+	require.JSONEq(t, expectedResponse, string(data))
 }
 
-func makeStatusCall(handler RequestHandler) *http.Response {
+func TestPeersHandler_GetReliableNodesWithMinimumTick(t *testing.T) {
+	testData := []struct {
+		name                  string
+		nodes                 []*node.Node
+		minimumTick           uint32
+		expectedReliableNodes []*node.Node
+	}{
+		{
+			name: "TestContainer_GetReliableNodesWithMinimumTick_1_node_below_minimum",
+			nodes: []*node.Node{
+				{
+					LastTick: 1992,
+				},
+			},
+			minimumTick:           1993,
+			expectedReliableNodes: []*node.Node{},
+		},
+		{
+			name: "TestContainer_GetReliableNodesWithMinimumTick_2_node_below_minimum",
+			nodes: []*node.Node{
+				{
+					LastTick: 1992,
+				},
+				{
+					LastTick: 1991,
+				},
+			},
+			minimumTick:           1993,
+			expectedReliableNodes: []*node.Node{},
+		},
+		{
+			name: "TestContainer_GetReliableNodesWithMinimumTick_1_node_above_minimum",
+			nodes: []*node.Node{
+				{
+					LastTick: 1992,
+				},
+				{
+					LastTick: 1991,
+				},
+				{
+					LastTick: 1994,
+				},
+			},
+			minimumTick: 1993,
+			expectedReliableNodes: []*node.Node{
+				{
+					LastTick: 1994,
+				},
+			},
+		},
+		{
+			name: "TestContainer_GetReliableNodesWithMinimumTick_1_node_equal_minimum",
+			nodes: []*node.Node{
+				{
+					LastTick: 1992,
+				},
+				{
+					LastTick: 1991,
+				},
+				{
+					LastTick: 1993,
+				},
+			},
+			minimumTick: 1993,
+			expectedReliableNodes: []*node.Node{
+				{
+					LastTick: 1993,
+				},
+			},
+		},
+		{
+			name: "TestContainer_GetReliableNodesWithMinimumTick_2_node_equal_and_above_minimum",
+			nodes: []*node.Node{
+				{
+					LastTick: 1992,
+				},
+				{
+					LastTick: 1991,
+				},
+				{
+					LastTick: 1993,
+				},
+				{
+					LastTick: 1994,
+				},
+			},
+			minimumTick: 1993,
+			expectedReliableNodes: []*node.Node{
+				{
+					LastTick: 1993,
+				},
+				{
+					LastTick: 1994,
+				},
+			},
+		},
+	}
+
+	testFunc := func(t *testing.T, minimumTick uint32, nodes []*node.Node, expectedReliablePeers []*node.Node) func(t *testing.T) {
+
+		return func(t *testing.T) {
+			container := &node.Container{}
+			container.ReliableNodes = nodes
+
+			handler := PeersHandler{Container: container}
+			resp, err := makeGetReliableNodesWithMinimumTickCall(handler, minimumTick)
+			require.NoError(t, err, "making reliable nodes call")
+			expectedResponse := reliablePeersAtMinimumTickResponse{
+				RequestedMinimumTick: minimumTick,
+				ReliableNodes:        expectedReliablePeers,
+			}
+
+			diff := cmp.Diff(expectedResponse, resp)
+			require.Empty(t, diff)
+		}
+	}
+
+	for _, test := range testData {
+		t.Run(test.name, testFunc(t, test.minimumTick, test.nodes, test.expectedReliableNodes))
+	}
+}
+
+func makeStatusCall(handler PeersHandler) *http.Response {
 	rec := httptest.NewRecorder()
 	handler.HandleStatus(rec, nil)
 	resp := rec.Result()
-	defer func(Body io.ReadCloser) {
-		_ = Body.Close()
-	}(resp.Body)
+	defer resp.Body.Close()
 	return resp
+}
+
+func makeGetReliableNodesWithMinimumTickCall(handler PeersHandler, minimumTick uint32) (reliablePeersAtMinimumTickResponse, error) {
+	rec := httptest.NewRecorder()
+	body := `{"minimum_tick": ` + fmt.Sprintf("%d", minimumTick) + `}`
+	req := httptest.NewRequest("POST", "/reliable-nodes", bytes.NewBuffer([]byte(body)))
+	defer req.Body.Close()
+
+	handler.GetReliableNodesWithMinimumTick(rec, req)
+	resp := rec.Result()
+	defer resp.Body.Close()
+
+	var respBody reliablePeersAtMinimumTickResponse
+	err := json.NewDecoder(resp.Body).Decode(&respBody)
+	if err != nil {
+		return reliablePeersAtMinimumTickResponse{}, errors.Wrap(err, "decoding response body")
+	}
+
+	return respBody, nil
 }
