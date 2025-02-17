@@ -53,9 +53,6 @@ func (c *Container) Update() error {
 	log.Printf("Refreshing nodes...\n")
 
 	onlineNodes := fetchOnlineNodes(c.Addresses, c.Port, c.connectionTimeout)
-	slices.SortFunc(onlineNodes, func(a, b *Node) int {
-		return cmp.Compare(a.LastTick, b.LastTick)
-	})
 	maxTick := calculateMaxTick(onlineNodes, c.TickErrorThreshold)
 
 	reliableNodes, mostReliableNode := getReliableNodes(onlineNodes, maxTick, maxTick-c.ReliableTickRange)
@@ -114,6 +111,9 @@ func fetchOnlineNodes(addresses []string, port string, connectionTimeout time.Du
 }
 
 func calculateMaxTick(nodes []*Node, threshold uint32) uint32 {
+	slices.SortFunc(nodes, func(a, b *Node) int {
+		return cmp.Compare(a.LastTick, b.LastTick)
+	})
 
 	arrayLength := len(nodes)
 
@@ -121,17 +121,7 @@ func calculateMaxTick(nodes []*Node, threshold uint32) uint32 {
 		return 0
 	}
 
-	if arrayLength < 2 {
-		return nodes[0].LastTick
-	}
-
-	maxTick := nodes[len(nodes)-1].LastTick
-	maxTick2 := nodes[len(nodes)-2].LastTick
-
-	if maxTick2 != 0 && (maxTick-maxTick2) >= threshold {
-		return maxTick2
-	}
-	return maxTick
+	return nodes[arrayLength-1].LastTick
 }
 
 func getReliableNodes(onlineNodes []*Node, maximum, minimum uint32) ([]*Node, *Node) {
