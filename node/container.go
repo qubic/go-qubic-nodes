@@ -126,7 +126,7 @@ func calculateMaxTick(nodes []*Node, threshold uint32) uint32 {
 
 func getReliableNodes(onlineNodes []*Node, maximum, minimum uint32) ([]*Node, *Node) {
 
-	var reliableNodes []*Node
+	reliableNodes := make([]*Node, 0, len(onlineNodes))
 
 	var mostReliableNode *Node
 
