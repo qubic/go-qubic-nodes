@@ -1,6 +1,8 @@
 package node
 
 import (
+	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -13,342 +15,100 @@ func TestMaxTick(t *testing.T) {
 		want      uint32
 	}{
 		{
-			name: "TestMaxTick_1",
+			name: "TestMaxTick_last_element",
 			nodes: []*Node{
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1000,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1000,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1021,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1021,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1023,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1023,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1023,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1023,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1753,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1753,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1800,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1800,
 				}, {
-					Address:           "",
-					Peers:             nil,
-					LastTick:          100,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 100,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1945,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1945,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          2000,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 2000,
 				}, {
-					Address:           "",
-					Peers:             nil,
-					LastTick:          3000,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 3000,
 				},
 			},
 			want:      3000,
 			threshold: 50,
 		},
 		{
-			name: "TestMaxTick_2",
+			name: "TestMaxTick_element_in_middle_of_slice",
 			nodes: []*Node{
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1000,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1021,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1021,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1000,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1023,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1023,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1023,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1023,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1753,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 2500,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1800,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 5700,
 				}, {
-					Address:           "",
-					Peers:             nil,
-					LastTick:          100,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 100,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1945,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1945,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          2000,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 2000,
 				}, {
-					Address:           "",
-					Peers:             nil,
-					LastTick:          2050,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-			},
-			want:      2050,
-			threshold: 50,
-		},
-		{
-			name: "TestMaxTick_3",
-			nodes: []*Node{
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1000,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1021,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1023,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1023,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1753,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1800,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				}, {
-					Address:           "",
-					Peers:             nil,
-					LastTick:          100,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1945,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          2000,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				}, {
-					Address:           "",
-					Peers:             nil,
-					LastTick:          2049,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-			},
-			want:      2049,
-			threshold: 50,
-		},
-		{
-			name: "TestMaxTick_4",
-			nodes: []*Node{
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1021,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1000,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1023,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1023,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          2500,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          5700,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				}, {
-					Address:           "",
-					Peers:             nil,
-					LastTick:          100,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1945,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          2000,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				}, {
-					Address:           "",
-					Peers:             nil,
-					LastTick:          3000,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 3000,
 				},
 			},
 			want:      5700,
 			threshold: 50,
 		},
 		{
-			name: "TestMaxTick_5",
+			name: "TestMaxTick_one_element",
 			nodes: []*Node{
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1000,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1000,
 				},
 			},
 			want:      1000,
 			threshold: 50,
 		},
 		{
-			name: "TestMaxTick_6",
+			name: "TestMaxTick_first_element",
 			nodes: []*Node{
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1500,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1500,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1000,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1000,
 				},
 			},
 			want:      1500,
 			threshold: 50,
 		},
 		{
-			name:      "TestMaxTick_7",
+			name:      "TestMaxTick_no_elements",
 			nodes:     []*Node{},
 			want:      0,
 			threshold: 50,
@@ -369,163 +129,88 @@ func TestMaxTick(t *testing.T) {
 func TestReliableNodes(t *testing.T) {
 
 	testData := []struct {
-		name             string
-		nodes            []*Node
-		maxTickThreshold uint32
-		reliableRange    uint32
-		expectedLength   int
+		name                  string
+		nodes                 []*Node
+		maxTickThreshold      uint32
+		reliableRange         uint32
+		expectedReliableNodes []*Node
 	}{
 		{
-			name: "TestReliableNodes_1",
+			name: "TestReliableNodes_only_one",
 			nodes: []*Node{
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1992,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1992,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1993,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1993,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1994,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1994,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1995,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1995,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1996,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1996,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1997,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1997,
 				}, {
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1998,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1998,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1999,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 1999,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          2000,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 2000,
 				}, {
-					Address:           "",
-					Peers:             nil,
-					LastTick:          2050,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 2050,
 				},
 			},
-			expectedLength:   6,
+			expectedReliableNodes: []*Node{
+				{
+					LastTick: 2050,
+				},
+			},
 			maxTickThreshold: 50,
 			reliableRange:    5,
 		},
 		{
-			name: "TestReliableNodes_2",
+			name: "TestReliableNodes_3_elements",
 			nodes: []*Node{
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1992,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 2049,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1993,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 2048,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1994,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 2050,
 				},
 				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1995,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1996,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1997,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				}, {
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1998,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          1999,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				},
-				{
-					Address:           "",
-					Peers:             nil,
-					LastTick:          2000,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
-				}, {
-					Address:           "",
-					Peers:             nil,
-					LastTick:          2049,
-					LastUpdate:        0,
-					LastUpdateSuccess: true,
+					LastTick: 2044,
 				},
 			},
-			expectedLength:   1,
+			expectedReliableNodes: []*Node{
+				{
+					LastTick: 2048,
+				},
+				{
+					LastTick: 2049,
+				},
+				{
+					LastTick: 2050,
+				},
+			},
 			maxTickThreshold: 50,
 			reliableRange:    5,
+		},
+		{
+			name:                  "TestReliableNodes_no_elements",
+			nodes:                 []*Node{},
+			expectedReliableNodes: []*Node{},
+			maxTickThreshold:      50,
+			reliableRange:         5,
 		},
 	}
 	for _, test := range testData {
@@ -537,9 +222,8 @@ func TestReliableNodes(t *testing.T) {
 
 			reliableNodes, _ := getReliableNodes(test.nodes, maxTick, minTick)
 
-			if len(reliableNodes) != test.expectedLength {
-				t.Fatalf("Expected %d reliable nodes. Got: %d", test.expectedLength, len(reliableNodes))
-			}
+			diff := cmp.Diff(reliableNodes, test.expectedReliableNodes)
+			require.Empty(t, diff)
 
 			for _, node := range reliableNodes {
 				if node.LastTick < minTick || node.LastTick > maxTick {
