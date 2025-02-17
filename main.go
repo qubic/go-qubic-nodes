@@ -83,12 +83,15 @@ func run() error {
 
 	log.Printf("Staring WebServer...\n")
 
-	handler := web.RequestHandler{
+	handler := web.PeersHandler{
 		Container: container,
 	}
 
-	http.HandleFunc("/status", handler.HandleStatus)
-	http.HandleFunc("/max-tick", handler.HandleMaxTick)
+	router := http.NewServeMux()
+
+	router.HandleFunc("GET /status", handler.HandleStatus)
+	router.HandleFunc("GET /max-tick", handler.HandleMaxTick)
+	router.HandleFunc("POST /reliable-nodes", handler.GetReliableNodesWithMinimumTick)
 
 	return http.ListenAndServe(":8080", nil)
 

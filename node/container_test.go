@@ -235,3 +235,112 @@ func TestReliableNodes(t *testing.T) {
 
 	}
 }
+
+func TestContainer_GetReliableNodesWithMinimumTick(t *testing.T) {
+	testData := []struct {
+		name                  string
+		nodes                 []*Node
+		minimumTick           uint32
+		expectedReliableNodes []*Node
+	}{
+		{
+			name: "TestContainer_GetReliableNodesWithMinimumTick_1_node_below_minimum",
+			nodes: []*Node{
+				{
+					LastTick: 1992,
+				},
+			},
+			minimumTick:           1993,
+			expectedReliableNodes: []*Node{},
+		},
+		{
+			name: "TestContainer_GetReliableNodesWithMinimumTick_2_node_below_minimum",
+			nodes: []*Node{
+				{
+					LastTick: 1992,
+				},
+				{
+					LastTick: 1991,
+				},
+			},
+			minimumTick:           1993,
+			expectedReliableNodes: []*Node{},
+		},
+		{
+			name: "TestContainer_GetReliableNodesWithMinimumTick_1_node_above_minimum",
+			nodes: []*Node{
+				{
+					LastTick: 1992,
+				},
+				{
+					LastTick: 1991,
+				},
+				{
+					LastTick: 1994,
+				},
+			},
+			minimumTick: 1993,
+			expectedReliableNodes: []*Node{
+				{
+					LastTick: 1994,
+				},
+			},
+		},
+		{
+			name: "TestContainer_GetReliableNodesWithMinimumTick_1_node_equal_minimum",
+			nodes: []*Node{
+				{
+					LastTick: 1992,
+				},
+				{
+					LastTick: 1991,
+				},
+				{
+					LastTick: 1993,
+				},
+			},
+			minimumTick: 1993,
+			expectedReliableNodes: []*Node{
+				{
+					LastTick: 1993,
+				},
+			},
+		},
+		{
+			name: "TestContainer_GetReliableNodesWithMinimumTick_2_node_equal_and_above_minimum",
+			nodes: []*Node{
+				{
+					LastTick: 1992,
+				},
+				{
+					LastTick: 1991,
+				},
+				{
+					LastTick: 1993,
+				},
+				{
+					LastTick: 1994,
+				},
+			},
+			minimumTick: 1993,
+			expectedReliableNodes: []*Node{
+				{
+					LastTick: 1993,
+				},
+				{
+					LastTick: 1994,
+				},
+			},
+		},
+	}
+
+	for _, test := range testData {
+		t.Run(test.name, func(t *testing.T) {
+			container := &Container{}
+			container.ReliableNodes = test.nodes
+			reliableNodesAtMinimumTick := container.GetReliableNodesWithMinimumTick(test.minimumTick)
+			diff := cmp.Diff(reliableNodesAtMinimumTick, test.expectedReliableNodes)
+			require.Empty(t, diff)
+		})
+	}
+}

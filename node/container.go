@@ -92,6 +92,21 @@ func (c *Container) GetResponse() ContainerResponse {
 	}
 }
 
+func (c *Container) GetReliableNodesWithMinimumTick(tick uint32) []*Node {
+	c.mutexLock.RLock()
+	defer c.mutexLock.RUnlock()
+
+	reliableNodesAtMinimumTick := make([]*Node, 0, len(c.ReliableNodes))
+
+	for _, node := range c.ReliableNodes {
+		if node.LastTick >= tick {
+			reliableNodesAtMinimumTick = append(reliableNodesAtMinimumTick, node)
+		}
+	}
+
+	return reliableNodesAtMinimumTick
+}
+
 func fetchOnlineNodes(addresses []string, port string, connectionTimeout time.Duration) []*Node {
 
 	var onlineNodes []*Node
