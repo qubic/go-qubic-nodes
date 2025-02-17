@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/ardanlabs/conf"
 	"github.com/pkg/errors"
+	"github.com/qubic/go-qubic-nodes/metrics"
 	"github.com/qubic/go-qubic-nodes/node"
 	"github.com/qubic/go-qubic-nodes/web"
 	"log"
@@ -24,6 +25,7 @@ type Configuration struct {
 	}
 	Service struct {
 		TickerUpdateInterval time.Duration `conf:"default:5s"`
+		MetricsHost          string        `conf:"default:0.0.0.0:2112"`
 	}
 }
 
@@ -62,6 +64,9 @@ func run() error {
 	}
 	log.Printf("main: Config :\n%v\n", out)
 
+	meters := metrics.NewMetrics()
+	meters.SetTotalConfiguredNodes(len(config.Qubic.PeerList))
+
 	container, err := node.NewNodeContainer(config.Qubic.PeerList, config.Qubic.PeerPort, config.Qubic.MaxTickErrorThreshold, config.Qubic.ReliableTickRange, config.Qubic.ExchangeTimeout)
 	if err != nil {
 		log.Printf("Error: %v\n", err)
@@ -76,10 +81,18 @@ func run() error {
 				updateErr := container.Update()
 				if updateErr != nil {
 					log.Printf("Error: %v\n", updateErr)
+				} else {
+					response := container.GetResponse()
+					meters.SetReliableNodes(len(response.ReliableNodes))
 				}
+
 			}
 		}
 	}()
+
+	log.Printf("Starting metrics server...\n")
+	metricsServer := web.NewMetricsServer(config.Service.MetricsHost)
+	metricsServer.Start()
 
 	log.Printf("Staring WebServer...\n")
 
