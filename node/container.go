@@ -109,16 +109,38 @@ func (c *Container) GetReliableNodesWithMinimumTick(tick uint32) []*Node {
 
 func fetchOnlineNodes(addresses []string, port string, connectionTimeout time.Duration) []*Node {
 
-	var onlineNodes []*Node
+	var waitGroup sync.WaitGroup
+
+	nodesChannel := make(chan *Node, len(addresses))
 
 	for _, address := range addresses {
-		node, err := NewNode(address, port, connectionTimeout)
-		if err != nil {
-			log.Printf("Failed to create node: %v\n", err)
-			continue
-		}
+		waitGroup.Add(1)
 
-		onlineNodes = append(onlineNodes, node)
+		go func(nodesChannel chan<- *Node) {
+			defer waitGroup.Done()
+
+			log.Printf("Attempting to create node %s:%s\n", address, port)
+			now := time.Now()
+			node, err := NewNode(address, port, connectionTimeout)
+			if err != nil {
+				elapsed := time.Since(now)
+				log.Printf("Failed to create node: %v. Took %fs\n", err, elapsed.Seconds())
+				nodesChannel <- nil
+				return
+			}
+
+			elapsed := time.Since(now)
+			log.Printf("Got online node %s:%s. Took %fs\n", address, port, elapsed.Seconds())
+			nodesChannel <- node
+		}(nodesChannel)
+	}
+
+	var onlineNodes []*Node
+	for range len(addresses) {
+		node := <-nodesChannel
+		if node != nil {
+			onlineNodes = append(onlineNodes, node)
+		}
 	}
 
 	return onlineNodes
