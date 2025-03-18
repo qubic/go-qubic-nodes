@@ -112,14 +112,11 @@ func fetchOnlineNodes(addresses []string, port string, connectionTimeout time.Du
 	var waitGroup sync.WaitGroup
 
 	nodesChannel := make(chan *Node, len(addresses))
-
 	for _, address := range addresses {
 		waitGroup.Add(1)
-
-		go func(nodesChannel chan<- *Node) {
+		go func() {
 			defer waitGroup.Done()
 
-			log.Printf("Attempting to create node %s:%s\n", address, port)
 			now := time.Now()
 			node, err := NewNode(address, port, connectionTimeout)
 			if err != nil {
@@ -132,19 +129,19 @@ func fetchOnlineNodes(addresses []string, port string, connectionTimeout time.Du
 			elapsed := time.Since(now)
 			log.Printf("Got online node %s:%s. Took %fs\n", address, port, elapsed.Seconds())
 			nodesChannel <- node
-		}(nodesChannel)
+		}()
 	}
 
+	waitGroup.Wait()
+	close(nodesChannel)
+
 	var onlineNodes []*Node
-	for range len(addresses) {
-		node := <-nodesChannel
+	for node := range nodesChannel {
 		if node != nil {
 			onlineNodes = append(onlineNodes, node)
 		}
 	}
-
 	return onlineNodes
-
 }
 
 func calculateMaxTick(nodes []*Node, threshold uint32) uint32 {
