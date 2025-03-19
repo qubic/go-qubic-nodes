@@ -36,15 +36,15 @@ func TestHandler_whenStatus_thenReturnNumberOfConfiguredNodes(t *testing.T) {
 
 	var container = node.Container{
 
-		Addresses:          []string{node1.Address, node2.Address},
-		Port:               "12345",
-		TickErrorThreshold: 3,
-		ReliableTickRange:  4,
-		OnlineNodes:        nil,
-		MaxTick:            123,
-		LastUpdate:         1500000000,
-		ReliableNodes:      []*node.Node{&node1},
-		MostReliableNode:   &node1,
+		ConfiguredAddresses: []string{node1.Address, node2.Address},
+		Port:                "12345",
+		TickErrorThreshold:  3,
+		ReliableTickRange:   4,
+		OnlineNodes:         nil,
+		MaxTick:             123,
+		LastUpdate:          1500000000,
+		ReliableNodes:       []*node.Node{&node1},
+		MostReliableNode:    &node1,
 	}
 
 	handler := PeersHandler{

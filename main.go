@@ -21,6 +21,7 @@ type Configuration struct {
 		ExchangeTimeout       time.Duration `conf:"default:2s"`
 		MaxTickErrorThreshold uint32        `conf:"default:50"`
 		ReliableTickRange     uint32        `conf:"default:30"`
+		UsePublicPeers        bool          `conf:"default:false"`
 	}
 	Service struct {
 		TickerUpdateInterval time.Duration `conf:"default:5s"`
@@ -62,7 +63,7 @@ func run() error {
 	}
 	log.Printf("main: Config :\n%v\n", out)
 
-	container, err := node.NewNodeContainer(config.Qubic.PeerList, config.Qubic.PeerPort, config.Qubic.MaxTickErrorThreshold, config.Qubic.ReliableTickRange, config.Qubic.ExchangeTimeout)
+	container, err := node.NewNodeContainer(config.Qubic.PeerList, config.Qubic.PeerPort, config.Qubic.MaxTickErrorThreshold, config.Qubic.ReliableTickRange, config.Qubic.ExchangeTimeout, config.Qubic.UsePublicPeers)
 	if err != nil {
 		log.Printf("Error: %v\n", err)
 	}
