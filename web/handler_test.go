@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestHandler_whenStatus_thenReturnNumberOfConfiguredNodes(t *testing.T) {
@@ -34,17 +35,17 @@ func TestHandler_whenStatus_thenReturnNumberOfConfiguredNodes(t *testing.T) {
 		LastUpdateSuccess: true,
 	}
 
-	var container = node.Container{
+	peerManager := node.NewPeerManager([]string{node1.Address, node2.Address}, &node.NoPeerDiscovery{}, "12345", time.Second)
 
-		ConfiguredAddresses: []string{node1.Address, node2.Address},
-		Port:                "12345",
-		TickErrorThreshold:  3,
-		ReliableTickRange:   4,
-		OnlineNodes:         nil,
-		MaxTick:             123,
-		LastUpdate:          1500000000,
-		ReliableNodes:       []*node.Node{&node1},
-		MostReliableNode:    &node1,
+	var container = node.Container{
+		PeerManager:        peerManager,
+		TickErrorThreshold: 3,
+		ReliableTickRange:  4,
+		OnlineNodes:        nil,
+		MaxTick:            123,
+		LastUpdate:         1500000000,
+		ReliableNodes:      []*node.Node{&node1},
+		MostReliableNode:   &node1,
 	}
 
 	handler := PeersHandler{

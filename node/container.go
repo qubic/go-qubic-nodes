@@ -10,19 +10,15 @@ import (
 )
 
 type Container struct {
-	Addresses           []string
-	ConfiguredAddresses []string
-	Port                string
-	TickErrorThreshold  uint32
-	ReliableTickRange   uint32
-	OnlineNodes         []*Node
-	MaxTick             uint32
-	LastUpdate          int64
-	ReliableNodes       []*Node
-	MostReliableNode    *Node
-	mutexLock           sync.RWMutex
-	connectionTimeout   time.Duration
-	usePublicPeers      bool
+	PeerManager        *PeerManager
+	TickErrorThreshold uint32
+	ReliableTickRange  uint32
+	OnlineNodes        []*Node
+	MaxTick            uint32
+	LastUpdate         int64
+	ReliableNodes      []*Node
+	MostReliableNode   *Node
+	mutexLock          sync.RWMutex
 }
 
 type ContainerResponse struct {
@@ -32,16 +28,11 @@ type ContainerResponse struct {
 	MostReliableNode *Node
 }
 
-func NewNodeContainer(addresses []string, port string, tickErrorThreshold, reliableTickRange uint32, connectionTimeout time.Duration, usePublicPeers bool) (*Container, error) {
-
+func NewNodeContainer(peerManager *PeerManager, tickErrorThreshold, reliableTickRange uint32) (*Container, error) {
 	container := Container{
-		ConfiguredAddresses: addresses,
-		Addresses:           addresses,
-		Port:                port,
-		TickErrorThreshold:  tickErrorThreshold,
-		ReliableTickRange:   reliableTickRange,
-		connectionTimeout:   connectionTimeout,
-		usePublicPeers:      usePublicPeers,
+		PeerManager:        peerManager,
+		TickErrorThreshold: tickErrorThreshold,
+		ReliableTickRange:  reliableTickRange,
 	}
 	err := container.Update()
 	if err != nil {
@@ -56,10 +47,7 @@ func (c *Container) Update() error {
 	log.Printf("<==========REFRESH==========>\n")
 	log.Printf("Refreshing nodes...\n")
 
-	onlineNodes := fetchOnlineNodes(c.Addresses, c.Port, c.connectionTimeout)
-	if c.usePublicPeers {
-		lookForPublicPeers(onlineNodes, &c.Addresses, c.Port, c.connectionTimeout)
-	}
+	onlineNodes := c.PeerManager.UpdateNodes()
 	maxTick := calculateMaxTick(onlineNodes, c.TickErrorThreshold)
 
 	reliableNodes, mostReliableNode := getReliableNodes(onlineNodes, maxTick, maxTick-c.ReliableTickRange)
@@ -114,44 +102,11 @@ func (c *Container) GetReliableNodesWithMinimumTick(tick uint32) []*Node {
 }
 
 func (c *Container) GetNumberOfConfiguredNodes() int {
-	return len(c.ConfiguredAddresses)
+	return c.PeerManager.GetNumberOfConfiguredNodes()
 }
 
 func (c *Container) GetNumberOfKnownNodes() int {
-	return len(c.Addresses)
-}
-
-func fetchOnlineNodes(addresses []string, port string, connectionTimeout time.Duration) []*Node {
-
-	var waitGroup sync.WaitGroup
-
-	nodesChannel := make(chan *Node, len(addresses))
-	for _, address := range addresses {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
-
-			node, err := NewNode(address, port, connectionTimeout)
-			if err != nil {
-				log.Printf("Failed to create node: %v.\n", err)
-				nodesChannel <- nil
-				return
-			}
-
-			nodesChannel <- node
-		}()
-	}
-
-	waitGroup.Wait()
-	close(nodesChannel)
-
-	var onlineNodes []*Node
-	for node := range nodesChannel {
-		if node != nil {
-			onlineNodes = append(onlineNodes, node)
-		}
-	}
-	return onlineNodes
+	return c.PeerManager.GetNumberOfKnownNodes()
 }
 
 func calculateMaxTick(nodes []*Node, threshold uint32) uint32 {
@@ -187,27 +142,4 @@ func getReliableNodes(onlineNodes []*Node, maximum, minimum uint32) ([]*Node, *N
 	}
 
 	return reliableNodes, mostReliableNode
-}
-
-func lookForPublicPeers(nodes []*Node, addresses *[]string, port string, timeout time.Duration) {
-	newPeers := make([]string, 0)
-	for _, node := range nodes {
-		peers := node.Peers
-		for _, peer := range peers {
-			if !slices.Contains(*addresses, peer) && !slices.Contains(newPeers, peer) {
-				newPeers = append(newPeers, peer)
-			}
-		}
-	}
-	for _, peer := range newPeers {
-		go appendNodeToAddresses(peer, port, timeout, addresses)
-	}
-}
-
-func appendNodeToAddresses(host, port string, timeout time.Duration, addresses *[]string) {
-	_, err := NewNode(host, port, timeout)
-	if err == nil {
-		log.Printf("Add new peer: [%s]\n", host)
-		*addresses = append(*addresses, host)
-	} // else do not use node
 }

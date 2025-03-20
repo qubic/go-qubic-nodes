@@ -24,7 +24,7 @@ type Configuration struct {
 		UsePublicPeers        bool          `conf:"default:false"`
 	}
 	Service struct {
-		TickerUpdateInterval time.Duration `conf:"default:5s"`
+		TickerUpdateInterval time.Duration `conf:"default:10s"`
 	}
 }
 
@@ -63,7 +63,9 @@ func run() error {
 	}
 	log.Printf("main: Config :\n%v\n", out)
 
-	container, err := node.NewNodeContainer(config.Qubic.PeerList, config.Qubic.PeerPort, config.Qubic.MaxTickErrorThreshold, config.Qubic.ReliableTickRange, config.Qubic.ExchangeTimeout, config.Qubic.UsePublicPeers)
+	peerDiscovery := createPeerDiscoveryStrategy(config)
+	peerManager := node.NewPeerManager(config.Qubic.PeerList, peerDiscovery, config.Qubic.PeerPort, config.Qubic.ExchangeTimeout)
+	container, err := node.NewNodeContainer(peerManager, config.Qubic.MaxTickErrorThreshold, config.Qubic.ReliableTickRange)
 	if err != nil {
 		log.Printf("Error: %v\n", err)
 	}
@@ -96,4 +98,14 @@ func run() error {
 
 	return http.ListenAndServe(":8080", router)
 
+}
+
+func createPeerDiscoveryStrategy(config Configuration) node.PeerDiscovery {
+	if config.Qubic.UsePublicPeers {
+		log.Println("main: Using public peers")
+		return node.NewPublicPeerDiscovery(config.Qubic.PeerPort, config.Qubic.ExchangeTimeout)
+	} else {
+		log.Println("main: Using static peers")
+		return &node.NoPeerDiscovery{}
+	}
 }
