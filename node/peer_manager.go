@@ -3,6 +3,7 @@ package node
 import (
 	"log"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -25,9 +26,16 @@ func NewPeerManager(addresses []string, peerDiscovery PeerDiscovery, port string
 
 // mainly for testing to inject custom node creation code
 func newPeerManagerWithCreateNodeFunction(addresses []string, peerDiscovery PeerDiscovery, createNodeFunction CreateNode) *PeerManager {
+	// trim host names
+	var trimmed []string
+	for _, peer := range addresses {
+		trimmed = append(trimmed, strings.TrimSpace(peer))
+	}
+	configuredPeers := make([]string, len(trimmed))
+	copy(configuredPeers, trimmed) // assure that they are not changed by changing current peers
 	peerManager := PeerManager{
-		configuredPeers:    addresses,
-		currentPeers:       addresses,
+		configuredPeers:    configuredPeers,
+		currentPeers:       trimmed,
 		createNodeFunction: createNodeFunction,
 		peerDiscovery:      peerDiscovery,
 	}
@@ -82,10 +90,22 @@ func (pm *PeerManager) GetNumberOfKnownNodes() int {
 }
 
 func (pm *PeerManager) updatePeers(nodes []*Node) {
-	newPeers := pm.peerDiscovery.UpdatePeers(nodes, pm.currentPeers)
+
+	unhealthyPeers := pm.peerDiscovery.CleanupPeers(nodes, pm.currentPeers)
+	for _, host := range unhealthyPeers {
+		if !slices.Contains(pm.configuredPeers, host) { // don't remove configured nodes
+			// delete unhealthy peer from current peer list
+			log.Printf("Remove peer: [%s].", host)
+			pm.currentPeers = slices.DeleteFunc(pm.currentPeers, func(currentHost string) bool {
+				return strings.TrimSpace(currentHost) == host
+			})
+		}
+	}
+
+	newPeers := pm.peerDiscovery.FindNewPeers(nodes, pm.currentPeers)
 	for _, newPeer := range newPeers {
 		if !slices.Contains(pm.currentPeers, newPeer.Address) {
-			log.Printf("Adding peer: [%s].", newPeer.Address)
+			log.Printf("Add peer: [%s].", newPeer.Address)
 			pm.currentPeers = append(pm.currentPeers, newPeer.Address)
 		}
 	}

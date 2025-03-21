@@ -16,12 +16,14 @@ const prefix = "QUBIC_NODES"
 
 type Configuration struct {
 	Qubic struct {
-		PeerList              []string      `conf:"default:5.39.222.64;82.197.173.130;82.197.173.129"`
-		PeerPort              string        `conf:"default:21841"`
-		ExchangeTimeout       time.Duration `conf:"default:2s"`
-		MaxTickErrorThreshold uint32        `conf:"default:50"`
-		ReliableTickRange     uint32        `conf:"default:30"`
-		UsePublicPeers        bool          `conf:"default:false"`
+		PeerList                 []string      `conf:"default:5.39.222.64;82.197.173.130;82.197.173.129"`
+		PeerPort                 string        `conf:"default:21841"`
+		ExchangeTimeout          time.Duration `conf:"default:2s"`
+		MaxTickErrorThreshold    uint32        `conf:"default:50"`
+		ReliableTickRange        uint32        `conf:"default:30"`
+		UsePublicPeers           bool          `conf:"default:false"`
+		PublicPeersExclude       []string
+		PublicPeersCleanInterval time.Duration `conf:"default:24h"`
 	}
 	Service struct {
 		TickerUpdateInterval time.Duration `conf:"default:10s"`
@@ -103,7 +105,7 @@ func run() error {
 func createPeerDiscoveryStrategy(config Configuration) node.PeerDiscovery {
 	if config.Qubic.UsePublicPeers {
 		log.Println("main: Using public peers")
-		return node.NewPublicPeerDiscovery(config.Qubic.PeerPort, config.Qubic.ExchangeTimeout)
+		return node.NewPublicPeerDiscovery(config.Qubic.PeerPort, config.Qubic.ExchangeTimeout, config.Qubic.PublicPeersExclude, config.Qubic.PublicPeersCleanInterval)
 	} else {
 		log.Println("main: Using static peers")
 		return &node.NoPeerDiscovery{}
