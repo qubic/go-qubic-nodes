@@ -21,11 +21,11 @@ func (pl *UpdatedPeerList) contains(host string) bool {
 	return slices.Contains(pl.originalPeers, host) || slices.Contains(pl.newPeers, host)
 }
 
-func (pl *UpdatedPeerList) includePublicPeer(host string) bool {
+func (pl *UpdatedPeerList) isAcceptedHost(host string) bool {
 	return !slices.Contains(pl.excludedPeers, host)
 }
 
-func (pl *UpdatedPeerList) AddIfNew(host string) bool {
+func (pl *UpdatedPeerList) addIfNew(host string) bool {
 	pl.mutex.Lock()
 	defer pl.mutex.Unlock()
 	if !pl.contains(host) {
@@ -113,7 +113,7 @@ func (ppd PublicPeerDiscovery) FindNewPeers(nodes []*Node, addresses []string) [
 
 	var newNodes []*Node
 	for node := range nodesChannel {
-		if peers.includePublicPeer(node.Address) {
+		if peers.isAcceptedHost(node.Address) {
 			newNodes = append(newNodes, node)
 		}
 	}
@@ -124,7 +124,7 @@ func (ppd PublicPeerDiscovery) FindNewPeers(nodes []*Node, addresses []string) [
 func (ppd PublicPeerDiscovery) lookupPeers(hosts []string, peers *UpdatedPeerList, channel chan *Node, waitGroup *sync.WaitGroup) {
 	for _, host := range hosts {
 		// abort if channel is filled with next peer
-		if len(channel) < maxNewPeersPerUpdate-2 && peers.AddIfNew(host) {
+		if len(channel) < maxNewPeersPerUpdate-2 && peers.addIfNew(host) {
 			waitGroup.Add(1)
 			go ppd.lookupPeer(host, peers, channel, waitGroup)
 		}

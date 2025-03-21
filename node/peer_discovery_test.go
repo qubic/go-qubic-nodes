@@ -36,13 +36,26 @@ func TestPeerList_AddIfNew(t *testing.T) {
 		mutex:         sync.Mutex{},
 	}
 
-	assert.False(t, peerList.AddIfNew("1.2.3.4"))
-	assert.False(t, peerList.AddIfNew("2.3.4.5"))
-	assert.False(t, peerList.AddIfNew("3.4.5.6"))
-	assert.False(t, peerList.AddIfNew("4.5.6.7"))
+	assert.False(t, peerList.addIfNew("1.2.3.4"))
+	assert.False(t, peerList.addIfNew("2.3.4.5"))
+	assert.False(t, peerList.addIfNew("3.4.5.6"))
+	assert.False(t, peerList.addIfNew("4.5.6.7"))
 
-	assert.True(t, peerList.AddIfNew("5.6.7.8"))
-	assert.False(t, peerList.AddIfNew("5.6.7.8")) // already added
+	assert.True(t, peerList.addIfNew("5.6.7.8"))
+	assert.False(t, peerList.addIfNew("5.6.7.8")) // already added
+}
+
+func TestPeerList_IsAcceptedHost(t *testing.T) {
+
+	peerList := UpdatedPeerList{
+		originalPeers: []string{"1.2.3.4"},
+		newPeers:      []string{"2.3.4.5"},
+		excludedPeers: []string{"6.6.6.6"},
+		mutex:         sync.Mutex{},
+	}
+
+	assert.True(t, peerList.isAcceptedHost("1.2.3.4"))
+	assert.False(t, peerList.isAcceptedHost("6.6.6.6"))
 }
 
 func TestPublicPeerDiscovery_UpdatePeers(t *testing.T) {
