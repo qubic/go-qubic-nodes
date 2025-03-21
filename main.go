@@ -26,7 +26,7 @@ type Configuration struct {
 		PublicPeersCleanInterval time.Duration `conf:"default:24h"`
 	}
 	Service struct {
-		TickerUpdateInterval time.Duration `conf:"default:10s"`
+		TickerUpdateInterval time.Duration `conf:"default:15s"`
 	}
 }
 
