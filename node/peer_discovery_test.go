@@ -9,10 +9,13 @@ import (
 )
 
 func TestNoPeerDiscovery_UpdatePeers(t *testing.T) {
-
 	discovery := NoPeerDiscovery{}
 	assert.Empty(t, discovery.FindNewPeers([]*Node{{}}, []string{"1.2.3.4", "2.3.4.5"}))
+}
 
+func TestNoPeerDiscovery_CleanupPeers(t *testing.T) {
+	discovery := NoPeerDiscovery{}
+	assert.Empty(t, discovery.CleanupPeers([]*Node{}, []string{}))
 }
 
 func TestPeerList_Contains(t *testing.T) {
