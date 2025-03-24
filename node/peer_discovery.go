@@ -51,11 +51,11 @@ type PublicPeerDiscovery struct {
 
 type NoPeerDiscovery struct{}
 
-func (npd NoPeerDiscovery) FindNewPeers(_ []*Node, _ []string) []*Node {
+func (npd *NoPeerDiscovery) FindNewPeers(_ []*Node, _ []string) []*Node {
 	return []*Node{}
 }
 
-func (npd NoPeerDiscovery) CleanupPeers(_ []*Node, _ []string) []string {
+func (npd *NoPeerDiscovery) CleanupPeers(_ []*Node, _ []string) []string {
 	return []string{}
 }
 
@@ -81,20 +81,23 @@ func newPublicPeerDiscovery(createNodeFunc CreateNode, excludedPeers []string, c
 	}
 }
 
-func (ppd PublicPeerDiscovery) CleanupPeers(nodes []*Node, addresses []string) []string {
+func (ppd *PublicPeerDiscovery) CleanupPeers(nodes []*Node, addresses []string) []string {
 	var unhealthyPeers []string
-	if ppd.latestCleanup.Add(ppd.cleanInterval).Before(time.Now()) {
+	// clean, if clean interval is over, and we have at least one healthy node (to retrieve more peers)
+	if len(nodes) >= 1 && ppd.latestCleanup.Add(ppd.cleanInterval).Before(time.Now()) {
 		for _, address := range addresses {
 			if !slices.ContainsFunc(nodes, func(node *Node) bool { return node.Address == address }) {
 				log.Printf("Unhealthy peer: [%s].", address)
 				unhealthyPeers = append(unhealthyPeers, address)
 			}
 		}
+		ppd.latestCleanup = time.Now()
+		log.Print("Checked for unhealthy peers...")
 	}
 	return unhealthyPeers
 }
 
-func (ppd PublicPeerDiscovery) FindNewPeers(nodes []*Node, addresses []string) []*Node {
+func (ppd *PublicPeerDiscovery) FindNewPeers(nodes []*Node, addresses []string) []*Node {
 	peerCopy := make([]string, len(addresses))
 	copy(peerCopy, addresses) // might get changed
 	peers := &UpdatedPeerList{
@@ -121,7 +124,7 @@ func (ppd PublicPeerDiscovery) FindNewPeers(nodes []*Node, addresses []string) [
 }
 
 // recursive
-func (ppd PublicPeerDiscovery) lookupPeers(hosts []string, peers *UpdatedPeerList, channel chan *Node, waitGroup *sync.WaitGroup) {
+func (ppd *PublicPeerDiscovery) lookupPeers(hosts []string, peers *UpdatedPeerList, channel chan *Node, waitGroup *sync.WaitGroup) {
 	for _, host := range hosts {
 		// abort if channel is filled with next peer
 		if len(channel) < maxNewPeersPerUpdate-2 && peers.addIfNew(host) {
@@ -132,7 +135,7 @@ func (ppd PublicPeerDiscovery) lookupPeers(hosts []string, peers *UpdatedPeerLis
 }
 
 // recursive
-func (ppd PublicPeerDiscovery) lookupPeer(host string, peers *UpdatedPeerList, channel chan *Node, waitGroup *sync.WaitGroup) {
+func (ppd *PublicPeerDiscovery) lookupPeer(host string, peers *UpdatedPeerList, channel chan *Node, waitGroup *sync.WaitGroup) {
 	defer waitGroup.Done()
 	node, err := ppd.createNodeFunction(host)
 	if err == nil {

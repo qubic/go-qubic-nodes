@@ -106,16 +106,26 @@ func TestPublicPeerDiscovery_CleanupPeers(t *testing.T) {
 	createNodeFunc := func(host string) (*Node, error) {
 		return nil, nil
 	}
-	discovery := newPublicPeerDiscovery(createNodeFunc, []string{}, time.Nanosecond)
-	time.Sleep(time.Millisecond)
+	discovery := newPublicPeerDiscovery(createNodeFunc, []string{}, 5*time.Millisecond)
+
+	time.Sleep(5 * time.Millisecond)
+	// no clean up as there is no healthy node
 	unhealthy := discovery.CleanupPeers([]*Node{}, []string{"2.3.4.5", "3.4.5.6"})
+	assert.Len(t, unhealthy, 0)
+
+	time.Sleep(5 * time.Millisecond)
+	// clean up both
+	unhealthy = discovery.CleanupPeers([]*Node{createTestNode("1.2.3.4")}, []string{"2.3.4.5", "3.4.5.6"})
 	assert.Len(t, unhealthy, 2)
 	assert.Contains(t, unhealthy, "2.3.4.5")
 	assert.Contains(t, unhealthy, "3.4.5.6")
 
+	time.Sleep(5 * time.Millisecond)
+	// clean up one
 	unhealthy = discovery.CleanupPeers([]*Node{createTestNode("2.3.4.5")}, []string{"2.3.4.5", "3.4.5.6"})
 	assert.Len(t, unhealthy, 1)
 	assert.Contains(t, unhealthy, "3.4.5.6")
+
 }
 
 func getHosts(discoveredPeers []*Node) []string {

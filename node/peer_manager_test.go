@@ -20,7 +20,7 @@ func createTestNodes(host string) (*Node, error) {
 
 func TestPeerManager_UpdateNodes(t *testing.T) {
 	peerDiscovery := NoPeerDiscovery{}
-	peerManager := newPeerManagerWithCreateNodeFunction([]string{"1.2.3.4", "6.6.6.6", "2.3.4.5"}, peerDiscovery, createTestNodes)
+	peerManager := newPeerManagerWithCreateNodeFunction([]string{"1.2.3.4", "6.6.6.6", "2.3.4.5"}, &peerDiscovery, createTestNodes)
 
 	nodes := peerManager.UpdateNodes()
 
