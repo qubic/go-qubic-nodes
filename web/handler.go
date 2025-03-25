@@ -76,7 +76,7 @@ func (h *PeersHandler) HandleStatus(w http.ResponseWriter, _ *http.Request) {
 	response := statusResponse{
 		MaxTick:                 containerResponse.MaxTick,
 		LastUpdate:              containerResponse.LastUpdate,
-		NumberOfConfiguredNodes: len(h.Container.Addresses),
+		NumberOfConfiguredNodes: h.Container.GetNumberOfConfiguredNodes(),
 		ReliableNodes:           reliableNodes,
 		MostReliableNode:        mostReliableResponse,
 	}

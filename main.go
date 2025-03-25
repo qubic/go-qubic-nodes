@@ -16,14 +16,17 @@ const prefix = "QUBIC_NODES"
 
 type Configuration struct {
 	Qubic struct {
-		PeerList              []string      `conf:"default:5.39.222.64;82.197.173.130;82.197.173.129"`
-		PeerPort              string        `conf:"default:21841"`
-		ExchangeTimeout       time.Duration `conf:"default:2s"`
-		MaxTickErrorThreshold uint32        `conf:"default:50"`
-		ReliableTickRange     uint32        `conf:"default:30"`
+		PeerList                 []string      `conf:"default:5.39.222.64;82.197.173.130;82.197.173.129"`
+		PeerPort                 string        `conf:"default:21841"`
+		ExchangeTimeout          time.Duration `conf:"default:2s"`
+		MaxTickErrorThreshold    uint32        `conf:"default:50"`
+		ReliableTickRange        uint32        `conf:"default:30"`
+		UsePublicPeers           bool          `conf:"default:false"`
+		PublicPeersExclude       []string
+		PublicPeersCleanInterval time.Duration `conf:"default:24h"`
 	}
 	Service struct {
-		TickerUpdateInterval time.Duration `conf:"default:5s"`
+		TickerUpdateInterval time.Duration `conf:"default:15s"`
 	}
 }
 
@@ -62,7 +65,9 @@ func run() error {
 	}
 	log.Printf("main: Config :\n%v\n", out)
 
-	container, err := node.NewNodeContainer(config.Qubic.PeerList, config.Qubic.PeerPort, config.Qubic.MaxTickErrorThreshold, config.Qubic.ReliableTickRange, config.Qubic.ExchangeTimeout)
+	peerDiscovery := createPeerDiscoveryStrategy(config)
+	peerManager := node.NewPeerManager(config.Qubic.PeerList, peerDiscovery, config.Qubic.PeerPort, config.Qubic.ExchangeTimeout)
+	container, err := node.NewNodeContainer(peerManager, config.Qubic.MaxTickErrorThreshold, config.Qubic.ReliableTickRange)
 	if err != nil {
 		log.Printf("Error: %v\n", err)
 	}
@@ -95,4 +100,14 @@ func run() error {
 
 	return http.ListenAndServe(":8080", router)
 
+}
+
+func createPeerDiscoveryStrategy(config Configuration) node.PeerDiscovery {
+	if config.Qubic.UsePublicPeers {
+		log.Println("main: Using public peers")
+		return node.NewPublicPeerDiscovery(config.Qubic.PeerPort, config.Qubic.ExchangeTimeout, config.Qubic.PublicPeersExclude, config.Qubic.PublicPeersCleanInterval)
+	} else {
+		log.Println("main: Using static peers")
+		return &node.NoPeerDiscovery{}
+	}
 }
