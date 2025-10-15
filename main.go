@@ -2,14 +2,19 @@ package main
 
 import (
 	"fmt"
-	"github.com/ardanlabs/conf"
-	"github.com/pkg/errors"
-	"github.com/qubic/go-qubic-nodes/node"
-	"github.com/qubic/go-qubic-nodes/web"
 	"log"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/ardanlabs/conf"
+	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/qubic/go-qubic-nodes/metrics"
+	"github.com/qubic/go-qubic-nodes/node"
+	"github.com/qubic/go-qubic-nodes/web"
 )
 
 const prefix = "QUBIC_NODES"
@@ -27,6 +32,9 @@ type Configuration struct {
 	}
 	Service struct {
 		TickerUpdateInterval time.Duration `conf:"default:15s"`
+	}
+	Metrics struct {
+		Namespace string `conf:"default:qubic_nodes"`
 	}
 }
 
@@ -65,9 +73,13 @@ func run() error {
 	}
 	log.Printf("main: Config :\n%v\n", out)
 
+	prometheusRegistry := prometheus.NewRegistry()
+	prometheusRegistry.MustRegister(collectors.NewGoCollector())
+	m := metrics.NewNodesServiceMetrics(prometheusRegistry, config.Metrics.Namespace)
+
 	peerDiscovery := createPeerDiscoveryStrategy(config)
 	peerManager := node.NewPeerManager(config.Qubic.PeerList, peerDiscovery, config.Qubic.PeerPort, config.Qubic.ExchangeTimeout)
-	container, err := node.NewNodeContainer(peerManager, config.Qubic.MaxTickErrorThreshold, config.Qubic.ReliableTickRange)
+	container, err := node.NewNodeContainer(peerManager, config.Qubic.MaxTickErrorThreshold, config.Qubic.ReliableTickRange, m)
 	if err != nil {
 		log.Printf("Error: %v\n", err)
 	}
@@ -97,7 +109,7 @@ func run() error {
 	router.HandleFunc("GET /status", handler.HandleStatus)
 	router.HandleFunc("GET /max-tick", handler.HandleMaxTick)
 	router.HandleFunc("POST /reliable-nodes", handler.GetReliableNodesWithMinimumTick)
-
+	router.Handle("/metrics", promhttp.HandlerFor(prometheusRegistry, promhttp.HandlerOpts{EnableOpenMetrics: true}))
 	return http.ListenAndServe(":8080", router)
 
 }
