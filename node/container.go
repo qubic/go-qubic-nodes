@@ -2,7 +2,10 @@ package node
 
 import (
 	"cmp"
+
 	"github.com/pkg/errors"
+	"github.com/qubic/go-qubic-nodes/metrics"
+
 	"log"
 	"slices"
 	"sync"
@@ -19,6 +22,7 @@ type Container struct {
 	ReliableNodes      []*Node
 	MostReliableNode   *Node
 	mutexLock          sync.RWMutex
+	metrics            *metrics.NodesServiceMetrics
 }
 
 type ContainerResponse struct {
@@ -28,12 +32,14 @@ type ContainerResponse struct {
 	MostReliableNode *Node
 }
 
-func NewNodeContainer(peerManager *PeerManager, tickErrorThreshold, reliableTickRange uint32) (*Container, error) {
+func NewNodeContainer(peerManager *PeerManager, tickErrorThreshold, reliableTickRange uint32, m *metrics.NodesServiceMetrics) (*Container, error) {
 	container := Container{
 		PeerManager:        peerManager,
 		TickErrorThreshold: tickErrorThreshold,
 		ReliableTickRange:  reliableTickRange,
+		metrics:            m,
 	}
+	container.metrics.SetConfiguredNodeCount(len(peerManager.configuredPeers))
 	err := container.Update()
 	if err != nil {
 		return nil, errors.Wrap(err, "updating container after initialization")
@@ -53,6 +59,9 @@ func (c *Container) Update() error {
 	reliableNodes, mostReliableNode := getReliableNodes(onlineNodes, maxTick, maxTick-c.ReliableTickRange)
 
 	c.Set(onlineNodes, maxTick, time.Now().UTC().Unix(), reliableNodes, mostReliableNode)
+
+	c.metrics.SetReliableNodeCount(len(reliableNodes))
+	c.metrics.SetNetworkTick(maxTick)
 
 	log.Printf("Node count: %d\n", c.GetNumberOfKnownNodes())
 	log.Printf("Max tick: %d\n", maxTick)
