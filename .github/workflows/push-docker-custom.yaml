@@ -3,7 +3,7 @@ name: Deploy dev images to GHCR
 on:
   push:
     branches:
-      - 'feature/public-peers'
+      - 'peer-discovery-issue'
 
 jobs:
   push-store-image:
@@ -21,5 +21,5 @@ jobs:
 
       - name: 'Build Inventory Image'
         run: |
-          docker build . --tag ghcr.io/qubic/qubic-nodes:public-peers
-          docker push ghcr.io/qubic/qubic-nodes:public-peers
+          docker build . --tag ghcr.io/qubic/qubic-nodes:peer-discovery-issue
+          docker push ghcr.io/qubic/qubic-nodes:peer-discovery-issue
