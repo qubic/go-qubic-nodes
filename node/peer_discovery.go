@@ -111,8 +111,10 @@ func (ppd *PublicPeerDiscovery) FindNewPeers(nodes []*Node, addresses []string) 
 	for _, node := range nodes {
 		ppd.lookupPeers(node.Peers, peers, nodesChannel, &waitGroup)
 	}
-	waitGroup.Wait()
-	close(nodesChannel)
+	go func() {
+		waitGroup.Wait()
+		close(nodesChannel)
+	}()
 
 	var newNodes []*Node
 	for node := range nodesChannel {
