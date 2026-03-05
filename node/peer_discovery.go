@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const maxNewPeersPerUpdate = 50
+const approxMaxNewPeers = 50
 
 type UpdatedPeerList struct {
 	originalPeers []string
@@ -107,7 +107,9 @@ func (ppd *PublicPeerDiscovery) FindNewPeers(nodes []*Node, addresses []string) 
 	}
 
 	var waitGroup sync.WaitGroup
-	nodesChannel := make(chan *Node, maxNewPeersPerUpdate)
+	// channel must be large enough to not block.
+	// the new peer size should be enough but better be safe in case of a race condition.
+	nodesChannel := make(chan *Node, approxMaxNewPeers*2)
 	for _, node := range nodes {
 		ppd.lookupPeers(node.Peers, peers, nodesChannel, &waitGroup)
 	}
@@ -126,10 +128,12 @@ func (ppd *PublicPeerDiscovery) FindNewPeers(nodes []*Node, addresses []string) 
 // recursive
 func (ppd *PublicPeerDiscovery) lookupPeers(hosts []string, peers *UpdatedPeerList, channel chan *Node, waitGroup *sync.WaitGroup) {
 	for _, host := range hosts {
-		// abort if channel is filled with next peer
-		if len(channel) < maxNewPeersPerUpdate-2 && peers.addIfNew(host) {
+		// add new host and its new peers if we don't have enough peers yet (len-1 and -1 for current one)
+		// attention: asynchronous recursive call
+		if len(peers.newPeers) < approxMaxNewPeers && peers.addIfNew(host) {
+			log.Printf("Found new host: [%s]. (%d)", host, len(peers.newPeers))
 			waitGroup.Add(1)
-			go ppd.lookupPeer(host, peers, channel, waitGroup)
+			go ppd.lookupPeer(host, peers, channel, waitGroup) // async. This will get executed after this loop most probably
 		}
 	}
 }
@@ -139,7 +143,7 @@ func (ppd *PublicPeerDiscovery) lookupPeer(host string, peers *UpdatedPeerList, 
 	defer waitGroup.Done()
 	node, err := ppd.createNodeFunction(host)
 	if err == nil {
-		channel <- node
+		channel <- node // attention: we block here forever if the channel is full
 		ppd.lookupPeers(node.Peers, peers, channel, waitGroup)
 	}
 }

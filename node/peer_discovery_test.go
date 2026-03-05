@@ -1,11 +1,15 @@
 package node
 
 import (
-	"github.com/pkg/errors"
-	"github.com/stretchr/testify/assert"
+	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNoPeerDiscovery_UpdatePeers(t *testing.T) {
@@ -87,19 +91,132 @@ func TestPublicPeerDiscovery_UpdatePeers(t *testing.T) {
 	assert.Contains(t, hosts, "6.7.8.9")
 }
 
-func TestPublicPeerDiscovery_ExcludePeers(t *testing.T) {
-	createNodeFunc := func(host string) (*Node, error) {
-		return createTestNodeWithPeers(host, []string{"1.2.3.4", "6.6.6.6"}), nil // 6.6.6.6 excluded
+func TestPublicPeerDiscovery_FindNewPeers(t *testing.T) {
+	t.Run("returns empty when no new peers found", func(t *testing.T) {
+		createNodeFunc := func(host string) (*Node, error) {
+			return createTestNodeWithPeers(host, []string{}), nil
+		}
+		discovery := newPublicPeerDiscovery(createNodeFunc, []string{}, time.Hour)
+
+		discoveredPeers := discovery.FindNewPeers([]*Node{
+			createTestNodeWithPeers("1.2.3.4", []string{"2.3.4.5"}),
+		}, []string{"1.2.3.4", "2.3.4.5"})
+
+		assert.Empty(t, discoveredPeers)
+	})
+
+	t.Run("discovers new peers from existing nodes", func(t *testing.T) {
+		createNodeFunc := func(host string) (*Node, error) {
+			return createTestNodeWithPeers(host, []string{}), nil
+		}
+		discovery := newPublicPeerDiscovery(createNodeFunc, []string{}, time.Hour)
+
+		discoveredPeers := discovery.FindNewPeers([]*Node{
+			createTestNodeWithPeers("1.2.3.4", []string{"2.3.4.5", "3.4.5.6"}),
+		}, []string{"1.2.3.4"})
+
+		assert.Len(t, discoveredPeers, 2)
+		hosts := getHosts(discoveredPeers)
+		assert.Contains(t, hosts, "2.3.4.5")
+		assert.Contains(t, hosts, "3.4.5.6")
+	})
+
+	t.Run("recursively discovers peers from new peers", func(t *testing.T) {
+		createNodeFunc := func(host string) (*Node, error) {
+			switch host {
+			case "2.3.4.5":
+				return createTestNodeWithPeers(host, []string{"3.4.5.6"}), nil
+			case "3.4.5.6":
+				return createTestNodeWithPeers(host, []string{"4.5.6.7"}), nil
+			default:
+				return createTestNodeWithPeers(host, []string{}), nil
+			}
+		}
+		discovery := newPublicPeerDiscovery(createNodeFunc, []string{}, time.Hour)
+
+		discoveredPeers := discovery.FindNewPeers([]*Node{
+			createTestNodeWithPeers("1.2.3.4", []string{"2.3.4.5"}),
+		}, []string{"1.2.3.4"})
+
+		assert.Len(t, discoveredPeers, 3)
+		hosts := getHosts(discoveredPeers)
+		assert.Contains(t, hosts, "2.3.4.5")
+		assert.Contains(t, hosts, "3.4.5.6")
+		assert.Contains(t, hosts, "4.5.6.7")
+	})
+
+	t.Run("excludes peers from excluded list", func(t *testing.T) {
+		createNodeFunc := func(host string) (*Node, error) {
+			return createTestNodeWithPeers(host, []string{}), nil
+		}
+		discovery := newPublicPeerDiscovery(createNodeFunc, []string{"3.4.5.6"}, time.Hour)
+
+		discoveredPeers := discovery.FindNewPeers([]*Node{
+			createTestNodeWithPeers("1.2.3.4", []string{"2.3.4.5", "3.4.5.6", "4.5.6.7"}),
+		}, []string{"1.2.3.4"})
+
+		assert.Len(t, discoveredPeers, 2)
+		hosts := getHosts(discoveredPeers)
+		assert.Contains(t, hosts, "2.3.4.5")
+		assert.Contains(t, hosts, "4.5.6.7")
+		assert.NotContains(t, hosts, "3.4.5.6")
+	})
+
+	t.Run("handles node creation errors gracefully", func(t *testing.T) {
+		createNodeFunc := func(host string) (*Node, error) {
+			if host == "3.4.5.6" {
+				return nil, errors.Errorf("connection failed")
+			}
+			return createTestNodeWithPeers(host, []string{}), nil
+		}
+		discovery := newPublicPeerDiscovery(createNodeFunc, []string{}, time.Hour)
+
+		discoveredPeers := discovery.FindNewPeers([]*Node{
+			createTestNodeWithPeers("1.2.3.4", []string{"2.3.4.5", "3.4.5.6", "4.5.6.7"}),
+		}, []string{"1.2.3.4"})
+
+		assert.Len(t, discoveredPeers, 2)
+		hosts := getHosts(discoveredPeers)
+		assert.Contains(t, hosts, "2.3.4.5")
+		assert.Contains(t, hosts, "4.5.6.7")
+		assert.NotContains(t, hosts, "3.4.5.6")
+	})
+}
+
+func TestPublicPeerDiscovery_nodeWithManyPeers(t *testing.T) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	done := make(chan struct{})
+
+	go func() {
+		// Generate many peers to test the limit
+		numberOfPeers := 100
+		manyPeers := make([]string, numberOfPeers)
+		for i := 0; i < numberOfPeers; i++ {
+			manyPeers[i] = fmt.Sprintf("10.0.0.%d", i)
+		}
+
+		createNodeFunc := func(host string) (*Node, error) {
+			return createTestNodeWithPeers(host, []string{}), nil
+		}
+		discovery := newPublicPeerDiscovery(createNodeFunc, []string{}, time.Hour)
+
+		discoveredPeers := discovery.FindNewPeers([]*Node{
+			createTestNodeWithPeers("1.2.3.4", manyPeers),
+		}, []string{"1.2.3.4"})
+
+		// Should not exceed maxNewPeersPerUpdate (50)
+		require.LessOrEqual(t, len(discoveredPeers), approxMaxNewPeers)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Test passed
+	case <-ctx.Done():
+		t.Fatal("Test timed out")
 	}
-	discovery := newPublicPeerDiscovery(createNodeFunc, []string{" 6.6.6.6"}, time.Hour)
-
-	discoveredPeers := discovery.FindNewPeers([]*Node{
-		createTestNodeWithPeers("1.2.3.4", []string{"2.3.4.5", "3.4.5.6"}), // 3.4.5.6 new peer
-	}, []string{"1.2.3.4", "2.3.4.5"})
-
-	assert.Len(t, discoveredPeers, 1)
-	hosts := getHosts(discoveredPeers)
-	assert.Contains(t, hosts, "3.4.5.6")
 }
 
 func TestPublicPeerDiscovery_CleanupPeers(t *testing.T) {
@@ -121,7 +238,7 @@ func TestPublicPeerDiscovery_CleanupPeers(t *testing.T) {
 	assert.Contains(t, unhealthy, "3.4.5.6")
 
 	time.Sleep(5 * time.Millisecond)
-	// clean up one
+	// clean up
 	unhealthy = discovery.CleanupPeers([]*Node{createTestNode("2.3.4.5")}, []string{"2.3.4.5", "3.4.5.6"})
 	assert.Len(t, unhealthy, 1)
 	assert.Contains(t, unhealthy, "3.4.5.6")
