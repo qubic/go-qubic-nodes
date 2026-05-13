@@ -1,7 +1,7 @@
 package node
 
 import (
-	"github.com/pkg/errors"
+	"errors"
 	"github.com/stretchr/testify/assert"
 	"log"
 	"testing"

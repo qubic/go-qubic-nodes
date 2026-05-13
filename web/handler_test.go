@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 	"github.com/qubic/go-qubic-nodes/node"
 	"github.com/stretchr/testify/require"
 	"io"
@@ -231,7 +230,7 @@ func makeGetReliableNodesWithMinimumTickCall(handler PeersHandler, minimumTick u
 	var respBody reliablePeersAtMinimumTickResponse
 	err := json.NewDecoder(resp.Body).Decode(&respBody)
 	if err != nil {
-		return reliablePeersAtMinimumTickResponse{}, errors.Wrap(err, "decoding response body")
+		return reliablePeersAtMinimumTickResponse{}, fmt.Errorf("decoding response body: %w", err)
 	}
 
 	return respBody, nil

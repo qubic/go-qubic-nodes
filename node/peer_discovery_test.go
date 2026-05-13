@@ -2,12 +2,12 @@ package node
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -68,7 +68,7 @@ func TestPeerList_IsAcceptedHost(t *testing.T) {
 func TestPublicPeerDiscovery_UpdatePeers(t *testing.T) {
 	createNodeFunc := func(host string) (*Node, error) {
 		if host == "6.6.6.6" {
-			return nil, errors.Errorf("Error creating node [%s].", host)
+			return nil, fmt.Errorf("Error creating node [%s].", host)
 		} else {
 			// new node with 1 new working peers (6.7.8.9), 1 erroneous new peer (6.6.6.6)
 			return createTestNodeWithPeers(host, []string{"1.2.3.4", "5.6.7.8", "6.6.6.6", "6.7.8.9"}),
@@ -165,7 +165,7 @@ func TestPublicPeerDiscovery_FindNewPeers(t *testing.T) {
 	t.Run("handles node creation errors gracefully", func(t *testing.T) {
 		createNodeFunc := func(host string) (*Node, error) {
 			if host == "3.4.5.6" {
-				return nil, errors.Errorf("connection failed")
+				return nil, errors.New("connection failed")
 			}
 			return createTestNodeWithPeers(host, []string{}), nil
 		}

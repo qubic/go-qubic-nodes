@@ -2,7 +2,7 @@ package web
 
 import (
 	"encoding/json"
-	"github.com/qubic/go-node-connector/types"
+	"github.com/qubic/go-node-connector/v2/types"
 	"github.com/qubic/go-qubic-nodes/node"
 
 	"log"

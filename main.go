@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/ardanlabs/conf"
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -53,23 +52,23 @@ func run() error {
 		case conf.ErrHelpWanted:
 			usage, err := conf.Usage(prefix, &config)
 			if err != nil {
-				return errors.Wrap(err, "generating config usage")
+				return fmt.Errorf("generating config usage: %w", err)
 			}
 			fmt.Println(usage)
 			return nil
 		case conf.ErrVersionWanted:
 			version, err := conf.VersionString(prefix, &config)
 			if err != nil {
-				return errors.Wrap(err, "generating config version")
+				return fmt.Errorf("generating config version: %w", err)
 			}
 			fmt.Println(version)
 			return nil
 		}
-		return errors.Wrap(err, "parsing config")
+		return fmt.Errorf("parsing config: %w", err)
 	}
 	out, err := conf.String(&config)
 	if err != nil {
-		return errors.Wrap(err, "generating config for output")
+		return fmt.Errorf("generating config for output: %w", err)
 	}
 	log.Printf("main: Config :\n%v\n", out)
 

@@ -2,8 +2,8 @@ package node
 
 import (
 	"cmp"
+	"fmt"
 
-	"github.com/pkg/errors"
 	"github.com/qubic/go-qubic-nodes/metrics"
 
 	"log"
@@ -42,7 +42,7 @@ func NewNodeContainer(peerManager *PeerManager, tickErrorThreshold, reliableTick
 	container.metrics.SetConfiguredNodeCount(len(peerManager.configuredPeers))
 	err := container.Update()
 	if err != nil {
-		return nil, errors.Wrap(err, "updating container after initialization")
+		return nil, fmt.Errorf("updating container after initialization: %w", err)
 	}
 
 	return &container, nil
