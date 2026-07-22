@@ -3,10 +3,11 @@ package node
 import (
 	"context"
 	"fmt"
-	qubic "github.com/qubic/go-node-connector/v2"
-	"github.com/qubic/go-node-connector/v2/types"
 	"log"
 	"time"
+
+	qubic "github.com/qubic/go-node-connector/v2"
+	"github.com/qubic/go-node-connector/v2/types"
 )
 
 type Node struct {

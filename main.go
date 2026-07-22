@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/ardanlabs/conf"
@@ -12,7 +16,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/qubic/go-qubic-nodes/metrics"
-	"github.com/qubic/go-qubic-nodes/node"
+	"github.com/qubic/go-qubic-nodes/peer"
 	"github.com/qubic/go-qubic-nodes/web"
 )
 
@@ -20,17 +24,18 @@ const prefix = "QUBIC_NODES"
 
 type Configuration struct {
 	Qubic struct {
-		PeerList                 []string      `conf:"default:5.39.222.64;82.197.173.130;82.197.173.129"`
-		PeerPort                 string        `conf:"default:21841"`
-		ExchangeTimeout          time.Duration `conf:"default:2s"`
-		MaxTickErrorThreshold    uint32        `conf:"default:50"`
-		ReliableTickRange        uint32        `conf:"default:30"`
-		UsePublicPeers           bool          `conf:"default:false"`
-		PublicPeersExclude       []string
-		PublicPeersCleanInterval time.Duration `conf:"default:24h"`
+		PeerList                  []string      `conf:"default:5.39.222.64;82.197.173.130;82.197.173.129"`
+		PeerPort                  string        `conf:"default:21841"`
+		PeerTimeout               time.Duration `conf:"default:3s"`
+		PeerCap                   int           `conf:"default:10"`
+		PeerSyncThreshold         uint32        `conf:"default:30"`
+		PeerResponseTimeThreshold time.Duration `conf:"default:250ms"`
 	}
 	Service struct {
-		TickerUpdateInterval time.Duration `conf:"default:15s"`
+		EnableDiscovery bool          `conf:"default:true"`
+		UpdateInterval  time.Duration `conf:"default:15s"`
+		Debug           bool          `conf:"default:false"`
+		FastWarmup      bool          `conf:"default:true"`
 	}
 	Metrics struct {
 		Namespace string `conf:"default:qubic_nodes"`
@@ -76,31 +81,30 @@ func run() error {
 	prometheusRegistry.MustRegister(collectors.NewGoCollector())
 	m := metrics.NewNodesServiceMetrics(prometheusRegistry, config.Metrics.Namespace)
 
-	peerDiscovery := createPeerDiscoveryStrategy(config)
-	peerManager := node.NewPeerManager(config.Qubic.PeerList, peerDiscovery, config.Qubic.PeerPort, config.Qubic.ExchangeTimeout)
-	container, err := node.NewNodeContainer(peerManager, config.Qubic.MaxTickErrorThreshold, config.Qubic.ReliableTickRange, m)
-	if err != nil {
-		log.Printf("Error: %v\n", err)
+	managerConfig := peer.ManagerConfig{
+		EnableDiscovery:                     config.Service.EnableDiscovery,
+		UpdateInterval:                      config.Service.UpdateInterval,
+		Debug:                               config.Service.Debug,
+		FastWarmUp:                          config.Service.FastWarmup,
+		SeedPeers:                           config.Qubic.PeerList,
+		PeerPort:                            config.Qubic.PeerPort,
+		PeerInfoTimeout:                     config.Qubic.PeerTimeout,
+		MaxPeers:                            config.Qubic.PeerCap,
+		NetworkTickAcceptanceThreshold:      config.Qubic.PeerSyncThreshold,
+		PeerResponseTimeAcceptanceThreshold: config.Qubic.PeerResponseTimeThreshold,
 	}
+	peerManager := peer.NewPeerManager(managerConfig, m)
 
-	go func() {
-		ticker := time.NewTicker(config.Service.TickerUpdateInterval)
+	// Root context cancelled on SIGINT/SIGTERM to coordinate a graceful shutdown.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
-		for {
-			select {
-			case <-ticker.C:
-				updateErr := container.Update()
-				if updateErr != nil {
-					log.Printf("Error: %v\n", updateErr)
-				}
-			}
-		}
-	}()
+	go peerManager.Start(ctx)
 
 	log.Printf("Staring WebServer...\n")
 
 	handler := web.PeersHandler{
-		Container: container,
+		PeerManager: peerManager,
 	}
 
 	router := http.NewServeMux()
@@ -109,16 +113,37 @@ func run() error {
 	router.HandleFunc("GET /max-tick", handler.HandleMaxTick)
 	router.HandleFunc("POST /reliable-nodes", handler.GetReliableNodesWithMinimumTick)
 	router.Handle("/metrics", promhttp.HandlerFor(prometheusRegistry, promhttp.HandlerOpts{EnableOpenMetrics: true}))
-	return http.ListenAndServe(":8080", router)
 
-}
-
-func createPeerDiscoveryStrategy(config Configuration) node.PeerDiscovery {
-	if config.Qubic.UsePublicPeers {
-		log.Println("main: Using public peers")
-		return node.NewPublicPeerDiscovery(config.Qubic.PeerPort, config.Qubic.ExchangeTimeout, config.Qubic.PublicPeersExclude, config.Qubic.PublicPeersCleanInterval)
-	} else {
-		log.Println("main: Using static peers")
-		return &node.NoPeerDiscovery{}
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: router,
 	}
+
+	// Run the server in its own goroutine so we can wait for the shutdown signal.
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+			return
+		}
+		serverErr <- nil
+	}()
+
+	// Wait for either the server to fail or a shutdown signal.
+	select {
+	case err := <-serverErr:
+		return err
+	case <-ctx.Done():
+		log.Printf("main: shutdown signal received, stopping...\n")
+	}
+
+	// Give in-flight requests time to complete before forcing the server down.
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("shutting down web server: %w", err)
+	}
+
+	log.Printf("main: shutdown complete\n")
+	return nil
 }
