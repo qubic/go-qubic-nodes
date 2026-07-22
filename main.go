@@ -99,7 +99,12 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	go peerManager.Start(ctx)
+	// Closed once Start has returned, so shutdown can wait for in-flight probes.
+	managerDone := make(chan struct{})
+	go func() {
+		defer close(managerDone)
+		peerManager.Start(ctx)
+	}()
 
 	log.Printf("Staring WebServer...\n")
 
@@ -132,6 +137,10 @@ func run() error {
 	// Wait for either the server to fail or a shutdown signal.
 	select {
 	case err := <-serverErr:
+		// The server died on its own. Cancel the root context so the peer
+		// manager unwinds too, instead of leaking it past our return.
+		stop()
+		<-managerDone
 		return err
 	case <-ctx.Done():
 		log.Printf("main: shutdown signal received, stopping...\n")
@@ -140,8 +149,19 @@ func run() error {
 	// Give in-flight requests time to complete before forcing the server down.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("shutting down web server: %w", err)
+	shutdownErr := server.Shutdown(shutdownCtx)
+
+	// The peer manager watches the same root context, so it is already stopping.
+	// Wait for its in-flight probes within whatever is left of the shutdown
+	// budget rather than exiting out from under them.
+	select {
+	case <-managerDone:
+	case <-shutdownCtx.Done():
+		log.Printf("main: peer manager did not stop in time\n")
+	}
+
+	if shutdownErr != nil {
+		return fmt.Errorf("shutting down web server: %w", shutdownErr)
 	}
 
 	log.Printf("main: shutdown complete\n")
