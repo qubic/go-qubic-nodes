@@ -63,6 +63,24 @@ func WithLogger(l *slog.Logger) Option {
 	}
 }
 
+// WithInitialPeers seeds the reliable peer set. It exists so callers outside this
+// package can build a Manager in a known state without running an update cycle
+// against the network.
+func WithInitialPeers(peers map[string]Prober) Option {
+	return func(m *Manager) {
+		m.reliablePeers = peers
+	}
+}
+
+// WithInitialStatus seeds the tick state reported by GetStatus, for the same
+// reason as WithInitialPeers.
+func WithInitialStatus(maxTick uint32, lastUpdate int64) Option {
+	return func(m *Manager) {
+		m.maxTick = maxTick
+		m.lastUpdate = lastUpdate
+	}
+}
+
 type ManagerConfig struct {
 	EnableDiscovery bool
 	UpdateInterval  time.Duration

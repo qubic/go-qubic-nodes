@@ -35,8 +35,8 @@ type maxTickResponse struct {
 }
 
 type reliablePeersAtMinimumTickResponse struct {
-	RequestedMinimumTick uint32 `json:"requested_minimum_tick"`
-	ReliableNodes        []node `json:"reliable_nodes"`
+	RequestedMinimumTick uint32         `json:"requested_minimum_tick"`
+	ReliableNodes        []nodeResponse `json:"reliable_nodes"`
 }
 
 func (h *PeersHandler) HandleStatus(w http.ResponseWriter, _ *http.Request) {
@@ -127,7 +127,10 @@ func (h *PeersHandler) HandleMaxTick(writer http.ResponseWriter, _ *http.Request
 	}
 }
 
-type node struct {
+// nodeResponse is the /reliable-nodes representation of a peer. It deliberately
+// carries no json tags: the exported field names are the established wire format
+// and renaming them would break existing clients.
+type nodeResponse struct {
 	Address           string
 	Port              string
 	Peers             types.PublicPeers
@@ -152,9 +155,9 @@ func (h *PeersHandler) GetReliableNodesWithMinimumTick(w http.ResponseWriter, r 
 	}
 
 	reliablePeers, lastUpdate := h.PeerManager.GetReliablePeersWithMinimumTick(mtr.MinimumTick)
-	reliableNodes := make([]node, 0, len(reliablePeers))
+	reliableNodes := make([]nodeResponse, 0, len(reliablePeers))
 	for _, reliablePeer := range reliablePeers {
-		reliableNodes = append(reliableNodes, node{
+		reliableNodes = append(reliableNodes, nodeResponse{
 			Address:           reliablePeer.GetAddress(),
 			Port:              reliablePeer.GetPort(),
 			Peers:             reliablePeer.GetLastKnownPeers(),
