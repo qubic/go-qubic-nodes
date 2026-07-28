@@ -2,61 +2,79 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
-	"github.com/qubic/go-qubic-nodes/node"
-	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/qubic/go-node-connector/v2/types"
+	"github.com/qubic/go-qubic-nodes/metrics"
+	"github.com/qubic/go-qubic-nodes/peer"
+	"github.com/stretchr/testify/require"
 )
 
+// stubPeer is a peer.Prober serving fixed values. The handler only ever reads the
+// last known state, so the probe itself is never exercised here.
+type stubPeer struct {
+	address string
+	port    string
+	tick    uint32
+	peers   types.PublicPeers
+}
+
+func (s *stubPeer) GetPeerInfo(context.Context, time.Duration) (peer.Info, error) {
+	return peer.Info{}, nil
+}
+
+func (s *stubPeer) GetAddress() string                   { return s.address }
+func (s *stubPeer) GetPort() string                      { return s.port }
+func (s *stubPeer) GetLastKnownTick() uint32             { return s.tick }
+func (s *stubPeer) GetLastKnownPeers() types.PublicPeers { return s.peers }
+
+// newTestHandler builds a handler over a Manager pinned to a known state, so the
+// responses under test depend only on that state and not on any network activity.
+func newTestHandler(t *testing.T, seedPeers []string, maxTick uint32, lastUpdate int64, peers ...*stubPeer) PeersHandler {
+	t.Helper()
+
+	reliablePeers := make(map[string]peer.Prober, len(peers))
+	for _, p := range peers {
+		reliablePeers[p.address] = p
+	}
+
+	manager := peer.NewPeerManager(
+		peer.ManagerConfig{
+			SeedPeers: seedPeers,
+			MaxPeers:  len(seedPeers),
+		},
+		metrics.NewNodesServiceMetrics(prometheus.NewRegistry(), "test"),
+		peer.WithInitialPeers(reliablePeers),
+		peer.WithInitialStatus(maxTick, lastUpdate),
+	)
+
+	return PeersHandler{PeerManager: manager}
+}
+
 func TestHandler_whenStatus_thenReturnNumberOfConfiguredNodes(t *testing.T) {
-
-	var node1 = node.Node{
-		Address:           "1.2.3.4",
-		Port:              "12345",
-		Peers:             []string{"2.3.4.5", "3.4.5.6"},
-		LastTick:          123,
-		LastUpdate:        1500000000,
-		LastUpdateSuccess: true,
+	node1 := &stubPeer{
+		address: "1.2.3.4",
+		port:    "12345",
+		tick:    123,
+		peers:   []string{"2.3.4.5", "3.4.5.6"},
 	}
 
-	var node2 = node.Node{
-		Address:           "2.3.4.5",
-		Port:              "12345",
-		Peers:             []string{"3.4.5.6", "1.2.3.4"},
-		LastTick:          122,
-		LastUpdate:        1500000000,
-		LastUpdateSuccess: true,
-	}
-
-	peerManager := node.NewPeerManager([]string{node1.Address, node2.Address}, &node.NoPeerDiscovery{}, "12345", time.Second)
-
-	var container = node.Container{
-		PeerManager:        peerManager,
-		TickErrorThreshold: 3,
-		ReliableTickRange:  4,
-		OnlineNodes:        nil,
-		MaxTick:            123,
-		LastUpdate:         1500000000,
-		ReliableNodes:      []*node.Node{&node1},
-		MostReliableNode:   &node1,
-	}
-
-	handler := PeersHandler{
-		Container: &container,
-	}
+	handler := newTestHandler(t, []string{"1.2.3.4", "2.3.4.5"}, 123, 1500000000, node1)
 
 	expectedResponse := `{
 		"max_tick": 123,
 		"last_update": 1500000000,
 		"number_of_configured_nodes": 2,
 		"reliable_nodes": [
-			{ 
+			{
 			  "address": "1.2.3.4",
 			  "port": "12345",
 			  "peers": [
@@ -87,125 +105,84 @@ func TestHandler_whenStatus_thenReturnNumberOfConfiguredNodes(t *testing.T) {
 	require.JSONEq(t, expectedResponse, string(data))
 }
 
+func TestHandler_whenStatusWithoutReliablePeers_thenServiceUnavailable(t *testing.T) {
+	handler := newTestHandler(t, []string{"1.2.3.4"}, 0, 1500000000)
+
+	resp := makeStatusCall(handler)
+
+	require.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+}
+
 func TestPeersHandler_GetReliableNodesWithMinimumTick(t *testing.T) {
 	testData := []struct {
-		name                  string
-		nodes                 []*node.Node
-		minimumTick           uint32
-		expectedReliableNodes []*node.Node
+		name        string
+		peers       []*stubPeer
+		minimumTick uint32
+		wantTicks   []uint32
 	}{
 		{
-			name: "TestContainer_GetReliableNodesWithMinimumTick_1_node_below_minimum",
-			nodes: []*node.Node{
-				{
-					LastTick: 1992,
-				},
-			},
-			minimumTick:           1993,
-			expectedReliableNodes: []*node.Node{},
+			name:        "1_node_below_minimum",
+			peers:       []*stubPeer{{address: "1.1.1.1", tick: 1992}},
+			minimumTick: 1993,
+			wantTicks:   []uint32{},
 		},
 		{
-			name: "TestContainer_GetReliableNodesWithMinimumTick_2_node_below_minimum",
-			nodes: []*node.Node{
-				{
-					LastTick: 1992,
-				},
-				{
-					LastTick: 1991,
-				},
-			},
-			minimumTick:           1993,
-			expectedReliableNodes: []*node.Node{},
+			name:        "2_nodes_below_minimum",
+			peers:       []*stubPeer{{address: "1.1.1.1", tick: 1992}, {address: "2.2.2.2", tick: 1991}},
+			minimumTick: 1993,
+			wantTicks:   []uint32{},
 		},
 		{
-			name: "TestContainer_GetReliableNodesWithMinimumTick_1_node_above_minimum",
-			nodes: []*node.Node{
-				{
-					LastTick: 1992,
-				},
-				{
-					LastTick: 1991,
-				},
-				{
-					LastTick: 1994,
-				},
+			name: "1_node_above_minimum",
+			peers: []*stubPeer{
+				{address: "1.1.1.1", tick: 1992},
+				{address: "2.2.2.2", tick: 1991},
+				{address: "3.3.3.3", tick: 1994},
 			},
 			minimumTick: 1993,
-			expectedReliableNodes: []*node.Node{
-				{
-					LastTick: 1994,
-				},
-			},
+			wantTicks:   []uint32{1994},
 		},
 		{
-			name: "TestContainer_GetReliableNodesWithMinimumTick_1_node_equal_minimum",
-			nodes: []*node.Node{
-				{
-					LastTick: 1992,
-				},
-				{
-					LastTick: 1991,
-				},
-				{
-					LastTick: 1993,
-				},
+			name: "1_node_equal_minimum",
+			peers: []*stubPeer{
+				{address: "1.1.1.1", tick: 1992},
+				{address: "2.2.2.2", tick: 1991},
+				{address: "3.3.3.3", tick: 1993},
 			},
 			minimumTick: 1993,
-			expectedReliableNodes: []*node.Node{
-				{
-					LastTick: 1993,
-				},
-			},
+			wantTicks:   []uint32{1993},
 		},
 		{
-			name: "TestContainer_GetReliableNodesWithMinimumTick_2_node_equal_and_above_minimum",
-			nodes: []*node.Node{
-				{
-					LastTick: 1992,
-				},
-				{
-					LastTick: 1991,
-				},
-				{
-					LastTick: 1993,
-				},
-				{
-					LastTick: 1994,
-				},
+			name: "2_nodes_equal_and_above_minimum",
+			peers: []*stubPeer{
+				{address: "1.1.1.1", tick: 1992},
+				{address: "2.2.2.2", tick: 1991},
+				{address: "3.3.3.3", tick: 1993},
+				{address: "4.4.4.4", tick: 1994},
 			},
 			minimumTick: 1993,
-			expectedReliableNodes: []*node.Node{
-				{
-					LastTick: 1993,
-				},
-				{
-					LastTick: 1994,
-				},
-			},
+			wantTicks:   []uint32{1993, 1994},
 		},
-	}
-
-	testFunc := func(t *testing.T, minimumTick uint32, nodes []*node.Node, expectedReliablePeers []*node.Node) func(t *testing.T) {
-
-		return func(t *testing.T) {
-			container := &node.Container{}
-			container.ReliableNodes = nodes
-
-			handler := PeersHandler{Container: container}
-			resp, err := makeGetReliableNodesWithMinimumTickCall(handler, minimumTick)
-			require.NoError(t, err, "making reliable nodes call")
-			expectedResponse := reliablePeersAtMinimumTickResponse{
-				RequestedMinimumTick: minimumTick,
-				ReliableNodes:        expectedReliablePeers,
-			}
-
-			diff := cmp.Diff(expectedResponse, resp)
-			require.Empty(t, diff)
-		}
 	}
 
 	for _, test := range testData {
-		t.Run(test.name, testFunc(t, test.minimumTick, test.nodes, test.expectedReliableNodes))
+		t.Run(test.name, func(t *testing.T) {
+			handler := newTestHandler(t, []string{"1.1.1.1"}, 1994, 1500000000, test.peers...)
+
+			resp, err := makeGetReliableNodesWithMinimumTickCall(handler, test.minimumTick)
+			require.NoError(t, err, "making reliable nodes call")
+
+			require.Equal(t, test.minimumTick, resp.RequestedMinimumTick)
+			// Length is asserted separately from contents: a response padded with
+			// zero-valued entries would still contain every expected tick.
+			require.Len(t, resp.ReliableNodes, len(test.wantTicks))
+
+			gotTicks := make([]uint32, 0, len(resp.ReliableNodes))
+			for _, n := range resp.ReliableNodes {
+				gotTicks = append(gotTicks, n.LastTick)
+			}
+			require.ElementsMatch(t, test.wantTicks, gotTicks)
+		})
 	}
 }
 

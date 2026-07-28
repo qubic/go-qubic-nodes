@@ -2,15 +2,16 @@ package web
 
 import (
 	"encoding/json"
+
 	"github.com/qubic/go-node-connector/v2/types"
-	"github.com/qubic/go-qubic-nodes/node"
+	"github.com/qubic/go-qubic-nodes/peer"
 
 	"log"
 	"net/http"
 )
 
 type PeersHandler struct {
-	Container *node.Container
+	PeerManager *peer.Manager
 }
 
 type statusResponse struct {
@@ -34,15 +35,15 @@ type maxTickResponse struct {
 }
 
 type reliablePeersAtMinimumTickResponse struct {
-	RequestedMinimumTick uint32       `json:"requested_minimum_tick"`
-	ReliableNodes        []*node.Node `json:"reliable_nodes"`
+	RequestedMinimumTick uint32         `json:"requested_minimum_tick"`
+	ReliableNodes        []nodeResponse `json:"reliable_nodes"`
 }
 
 func (h *PeersHandler) HandleStatus(w http.ResponseWriter, _ *http.Request) {
 
-	containerResponse := h.Container.GetResponse()
+	peerManagerStatus := h.PeerManager.GetStatus()
 
-	if len(containerResponse.ReliableNodes) == 0 {
+	if len(peerManagerStatus.ReliablePeers) == 0 {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, err := w.Write([]byte("No online or reliable nodes found."))
 		if err != nil {
@@ -52,31 +53,31 @@ func (h *PeersHandler) HandleStatus(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	var reliableNodes []reliableNode
-	for _, relNode := range containerResponse.ReliableNodes {
+	for _, relNode := range peerManagerStatus.ReliablePeers {
 		r := reliableNode{
-			Address:    relNode.Address,
-			Port:       relNode.Port,
-			Peers:      relNode.Peers,
-			LastTick:   relNode.LastTick,
-			LastUpdate: relNode.LastUpdate,
+			Address:    relNode.GetAddress(),
+			Port:       relNode.GetPort(),
+			Peers:      relNode.GetLastKnownPeers(),
+			LastTick:   relNode.GetLastKnownTick(),
+			LastUpdate: peerManagerStatus.LastUpdate,
 		}
 		reliableNodes = append(reliableNodes, r)
 	}
 
-	mostReliable := containerResponse.MostReliableNode
+	mostReliable := peerManagerStatus.MostReliablePeer
 
 	mostReliableResponse := reliableNode{
-		Address:    mostReliable.Address,
-		Port:       mostReliable.Port,
-		Peers:      mostReliable.Peers,
-		LastTick:   mostReliable.LastTick,
-		LastUpdate: mostReliable.LastUpdate,
+		Address:    mostReliable.GetAddress(),
+		Port:       mostReliable.GetPort(),
+		Peers:      mostReliable.GetLastKnownPeers(),
+		LastTick:   mostReliable.GetLastKnownTick(),
+		LastUpdate: peerManagerStatus.LastUpdate,
 	}
 
 	response := statusResponse{
-		MaxTick:                 containerResponse.MaxTick,
-		LastUpdate:              containerResponse.LastUpdate,
-		NumberOfConfiguredNodes: h.Container.GetNumberOfConfiguredNodes(),
+		MaxTick:                 peerManagerStatus.MaxTick,
+		LastUpdate:              peerManagerStatus.LastUpdate,
+		NumberOfConfiguredNodes: h.PeerManager.GetPeerCap(),
 		ReliableNodes:           reliableNodes,
 		MostReliableNode:        mostReliableResponse,
 	}
@@ -102,7 +103,7 @@ func (h *PeersHandler) HandleStatus(w http.ResponseWriter, _ *http.Request) {
 
 func (h *PeersHandler) HandleMaxTick(writer http.ResponseWriter, _ *http.Request) {
 
-	maxTick := h.Container.GetResponse().MaxTick
+	maxTick := h.PeerManager.GetStatus().MaxTick
 
 	response := maxTickResponse{
 		maxTick,
@@ -126,6 +127,18 @@ func (h *PeersHandler) HandleMaxTick(writer http.ResponseWriter, _ *http.Request
 	}
 }
 
+// nodeResponse is the /reliable-nodes representation of a peer. It deliberately
+// carries no json tags: the exported field names are the established wire format
+// and renaming them would break existing clients.
+type nodeResponse struct {
+	Address           string
+	Port              string
+	Peers             types.PublicPeers
+	LastTick          uint32
+	LastUpdate        int64
+	LastUpdateSuccess bool
+}
+
 func (h *PeersHandler) GetReliableNodesWithMinimumTick(w http.ResponseWriter, r *http.Request) {
 	var mtr struct {
 		MinimumTick uint32 `json:"minimum_tick"`
@@ -141,7 +154,18 @@ func (h *PeersHandler) GetReliableNodesWithMinimumTick(w http.ResponseWriter, r 
 		return
 	}
 
-	reliableNodes := h.Container.GetReliableNodesWithMinimumTick(mtr.MinimumTick)
+	reliablePeers, lastUpdate := h.PeerManager.GetReliablePeersWithMinimumTick(mtr.MinimumTick)
+	reliableNodes := make([]nodeResponse, 0, len(reliablePeers))
+	for _, reliablePeer := range reliablePeers {
+		reliableNodes = append(reliableNodes, nodeResponse{
+			Address:           reliablePeer.GetAddress(),
+			Port:              reliablePeer.GetPort(),
+			Peers:             reliablePeer.GetLastKnownPeers(),
+			LastTick:          reliablePeer.GetLastKnownTick(),
+			LastUpdate:        lastUpdate,
+			LastUpdateSuccess: true,
+		})
+	}
 
 	responseData := reliablePeersAtMinimumTickResponse{
 		RequestedMinimumTick: mtr.MinimumTick,
