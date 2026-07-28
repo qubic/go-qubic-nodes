@@ -32,13 +32,22 @@ type nodeConn interface {
 // GetPeerInfo be tested without opening a real socket.
 type connectFunc func(ctx context.Context, address, port string) (nodeConn, error)
 
-// defaultConnect is the production dialer, backed by the qubic client.
-func defaultConnect(ctx context.Context, address, port string) (nodeConn, error) {
-	client, err := qubic.NewClient(ctx, address, port)
-	if err != nil {
-		return nil, err
+// defaultConnect builds the production dialer, backed by the qubic client. With
+// noPeerFetching set, the client skips the peer exchange, so GetPeers reports an
+// empty list.
+func defaultConnect(noPeerFetching bool) connectFunc {
+	return func(ctx context.Context, address, port string) (nodeConn, error) {
+		var opts []qubic.Option
+		if noPeerFetching {
+			opts = append(opts, qubic.WithoutPeers())
+		}
+
+		client, err := qubic.NewClient(ctx, address, port, opts...)
+		if err != nil {
+			return nil, err
+		}
+		return &qubicConn{client}, nil
 	}
-	return &qubicConn{client}, nil
 }
 
 // qubicConn adapts *qubic.Client (which exposes Peers as a field) to nodeConn.
@@ -69,11 +78,13 @@ type Info struct {
 	ResponseTime time.Duration
 }
 
-func NewPeer(address, port string) *Peer {
+// NewPeer creates a peer. noPeerFetching skips the peer exchange when dialing,
+// which is what the Manager wants when discovery is disabled.
+func NewPeer(address, port string, noPeerFetching bool) *Peer {
 	return &Peer{
 		address: address,
 		port:    port,
-		connect: defaultConnect,
+		connect: defaultConnect(noPeerFetching),
 	}
 }
 

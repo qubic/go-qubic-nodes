@@ -47,7 +47,7 @@ func (c *fakeConn) Close() error {
 // newTestPeer builds a Peer whose dialer is replaced by connect, bypassing the
 // network entirely.
 func newTestPeer(address, port string, connect connectFunc) *Peer {
-	p := NewPeer(address, port)
+	p := NewPeer(address, port, false)
 	p.connect = connect
 	return p
 }
