@@ -131,9 +131,13 @@ func NewPeerManager(config ManagerConfig, m *metrics.NodesServiceMetrics, opts .
 		reliablePeersMutex:              sync.RWMutex{},
 		maxTickAcceptanceThreshold:      config.NetworkTickAcceptanceThreshold,
 		responseTimeAcceptanceThreshold: config.PeerResponseTimeAcceptanceThreshold,
-		newPeer:                         func(address, port string) Prober { return NewPeer(address, port) },
-		logger:                          logger,
-		metrics:                         m,
+		// Without discovery the peer lists nodes report are never used as
+		// candidates, so skip fetching them altogether.
+		newPeer: func(address, port string) Prober {
+			return NewPeer(address, port, !config.EnableDiscovery)
+		},
+		logger:  logger,
+		metrics: m,
 	}
 
 	for _, opt := range opts {
@@ -246,6 +250,7 @@ func (m *Manager) update(ctx context.Context) bool {
 		shouldWarmupFast = true
 	}
 
+	m.logger.Info("Network tick", "tick", maxTick)
 	m.reliablePeersMutex.Unlock()
 
 	return shouldWarmupFast
